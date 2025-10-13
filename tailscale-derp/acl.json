@@ -1,0 +1,19 @@
+"derpMap": {
+		"OmitDefaultRegions": true,
+		"Regions": {
+			"901": {
+				"RegionID":   901,
+				"RegionCode": "MyDerper",
+				"RegionName": "MyDerper",
+				"Nodes": [
+					{
+						"Name":     "901",
+						"RegionID": 901,
+						"DERPPort": 10086,
+						"IPv4":    "193.112.112.193",
+						"InsecureForTests": true,
+					},
+				],
+			},
+		},
+	},
