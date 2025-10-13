@@ -1,0 +1,6 @@
+listen-address 127.0.0.1:8118
+forward-socks5 / 127.0.0.1:1080 .
+forward         192.168.*.*/     .
+forward         10.*.*.*/        .
+forward         127.*.*.*/       .
+forward         localhost/       .
