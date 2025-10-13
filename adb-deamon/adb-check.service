@@ -1,0 +1,16 @@
+[Unit]
+Description=ADB USB Auto TCPIP and Forward Service
+After=network.target adb.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/etc/adb_check.sh
+Restart=always
+RestartSec=5
+User=root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
+
