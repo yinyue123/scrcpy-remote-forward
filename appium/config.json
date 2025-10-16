@@ -1,0 +1,35 @@
+{
+  "server": {
+    "port": 3000
+  },
+  "webdriverio": {
+    "hostname": "192.168.10.10",
+    "port": 4723,
+    "logLevel": "error",
+    "path": "/",
+    "connectionRetryTimeout": 120000,
+    "connectionRetryCount": 3
+  },
+  "capabilities": {
+    "platformName": "Android",
+    "automationName": "UiAutomator2",
+    "deviceName": "Android Emulator",
+    "platformVersion": "12.0",
+    "appPackage": "com.android.settings",
+    "appActivity": ".Settings",
+    "noReset": true,
+    "newCommandTimeout": 300,
+    "autoGrantPermissions": true,
+    "ignoreHiddenApiPolicyError": true
+  },
+  "timeouts": {
+    "implicit": 10000,
+    "pageLoad": 30000,
+    "script": 30000
+  },
+  "device": {
+    "unlockType": "pin",
+    "unlockKey": "1234",
+    "lockTimeout": 5000
+  }
+}

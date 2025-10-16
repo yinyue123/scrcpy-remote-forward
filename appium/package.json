@@ -1,0 +1,24 @@
+{
+  "name": "appium-nextjs-control",
+  "version": "1.0.0",
+  "description": "Appium control interface with Next.js",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "next build",
+    "start": "NODE_ENV=production node server.js"
+  },
+  "author": "yinyue",
+  "license": "ISC",
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "webdriverio": "^9.4.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17"
+  }
+}
