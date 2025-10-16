@@ -1,17 +1,34 @@
 import { NextResponse } from 'next/server'
-import { startAppiumSession, stopAppiumSession } from '../../../../src/lib/appium'
+import { startAppiumSession, stopAppiumSession, getDriver } from '../../src/appium'
 
-// API Route: /api/appium/session
-// - File: app/api/appium/session/route.js
-// - Notice the nested folder structure: api/appium/session/
-// - Only POST method is defined, so GET/PUT/DELETE will return 405 Method Not Allowed
+// API Route: /api/session
+// Session management without screenshot
+
+// GET method for checking session status
+export async function GET(request) {
+  try {
+    const driver = getDriver()
+    const isConnected = driver !== null
+
+    return NextResponse.json({
+      success: true,
+      connected: isConnected,
+      status: isConnected ? 'Connected' : 'Disconnected'
+    })
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, connected: false, status: 'Disconnected', error: error.message },
+      { status: 500 }
+    )
+  }
+}
+
+// POST method for starting/stopping session
 export async function POST(request) {
   try {
-    // Parse JSON from request body
     const body = await request.json()
     const { action } = body
 
-    // Handle different actions based on request body
     if (action === 'start') {
       await startAppiumSession()
       return NextResponse.json({ success: true, message: 'Appium session started' })

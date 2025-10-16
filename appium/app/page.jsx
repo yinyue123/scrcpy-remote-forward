@@ -5,7 +5,7 @@
 'use client'
 
 // Import React hooks - only works in Client Components
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // Link: Next.js component for navigation between pages
 // - Uses client-side navigation (no full page reload)
@@ -25,7 +25,9 @@ export default function HomePage() {
   const [status, setStatus] = useState('Disconnected')
   const [logs, setLogs] = useState([])
   const [results, setResults] = useState([])
-  const [command, setCommand] = useState('')
+  const [selectedScript, setSelectedScript] = useState('')
+  const [scripts, setScripts] = useState([])
+  const [screenshot, setScreenshot] = useState('')
 
   const addLog = (message) => {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`])
@@ -51,11 +53,7 @@ export default function HomePage() {
       addLog('Starting Appium session...')
       addResult('Start Session', 'pending')
 
-      // fetch: Call Next.js API route
-      // - Route: /api/appium/session → File: app/api/appium/session/route.js
-      // - No need for full URL (e.g., http://localhost:3000), just use relative path
-      // - Next.js automatically handles routing
-      const res = await fetch('/api/appium/session', {
+      const res = await fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'start' })
@@ -83,7 +81,7 @@ export default function HomePage() {
       addLog('Stopping Appium session...')
       addResult('Stop Session', 'pending')
 
-      const res = await fetch('/api/appium/session', {
+      const res = await fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'stop' })
@@ -104,93 +102,165 @@ export default function HomePage() {
     }
   }
 
-  const handleExecuteCommand = async () => {
-    if (!command) return
+  const handleExecuteScript = async () => {
+    if (!selectedScript) return
 
     try {
-      addLog(`Executing command: ${command}`)
-      addResult(command, 'pending')
+      addLog(`Executing script: ${selectedScript}`)
+      addResult(selectedScript, 'pending')
 
-      const res = await fetch('/api/appium/command', {
+      const res = await fetch('/api/scripts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command })
+        body: JSON.stringify({ scriptName: selectedScript })
       })
       const data = await res.json()
 
       if (data.success) {
-        addLog(`Command completed: ${command}`)
-        addResult(command, 'success', data.result)
+        addLog(`Script completed: ${selectedScript}`)
+        addResult(selectedScript, 'success', data.result)
+        // If script returned screenshot data, update the screenshot
+        if (data.result?.data) {
+          setScreenshot('data:image/png;base64,' + data.result.data)
+        }
       } else {
-        throw new Error(data.error || 'Command failed')
+        throw new Error(data.error || 'Script execution failed')
       }
     } catch (error) {
       addLog(`Error: ${error.message}`)
-      addResult(command, 'error', null, error.message)
+      addResult(selectedScript, 'error', null, error.message)
     }
   }
 
-  const handleUnlockDevice = async () => {
+  const loadScripts = async () => {
     try {
-      addLog('Unlocking device...')
-      addResult('Unlock Device', 'pending')
-
-      const res = await fetch('/api/appium/unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'unlock' })
-      })
+      const res = await fetch('/api/scripts')
       const data = await res.json()
 
       if (data.success) {
-        addLog('Device unlocked successfully')
-        addResult('Unlock Device', 'success', 'Device unlocked')
-      } else {
-        throw new Error(data.error || 'Failed to unlock')
+        setScripts(data.scripts)
+        addLog(`Loaded ${data.scripts.length} scripts`)
       }
     } catch (error) {
-      addLog(`Error: ${error.message}`)
-      addResult('Unlock Device', 'error', null, error.message)
+      console.error('Failed to load scripts:', error)
+      addLog(`Failed to load scripts: ${error.message}`)
     }
   }
 
-  const handleLockDevice = async () => {
+
+  // Update screenshot and check session status
+  const updateScreenshot = async () => {
     try {
-      addLog('Locking device...')
-      addResult('Lock Device', 'pending')
+      // Use timestamp to prevent caching
+      const timestamp = Date.now()
+      const response = await fetch(`/api/screenshot?t=${timestamp}`)
 
-      const res = await fetch('/api/appium/unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'lock' })
-      })
-      const data = await res.json()
+      if (response.status === 200) {
+        // 200: Success - get image and update
+        const blob = await response.blob()
+        const imageUrl = URL.createObjectURL(blob)
 
-      if (data.success) {
-        addLog('Device locked successfully')
-        addResult('Lock Device', 'success', 'Device locked')
-      } else {
-        throw new Error(data.error || 'Failed to lock')
+        // Revoke old URL to prevent memory leaks
+        if (screenshot && screenshot.startsWith('blob:')) {
+          URL.revokeObjectURL(screenshot)
+        }
+
+        setScreenshot(imageUrl)
+
+        // Update status if needed
+        if (status !== 'Connected') {
+          setStatus('Connected')
+        }
+      } else if (response.status === 204) {
+        // 204: Session connected but screenshot failed
+        if (status !== 'Connected') {
+          setStatus('Connected')
+        }
+        console.warn('Screenshot capture failed but session is connected')
+      } else if (response.status === 503) {
+        // 503: Session disconnected
+        if (sessionActive) {
+          setSessionActive(false)
+          setStatus('Disconnected')
+          addLog('Session disconnected (detected by screenshot API)')
+
+          // Clear screenshot and revoke URL
+          if (screenshot && screenshot.startsWith('blob:')) {
+            URL.revokeObjectURL(screenshot)
+          }
+          setScreenshot('')
+        }
       }
     } catch (error) {
-      addLog(`Error: ${error.message}`)
-      addResult('Lock Device', 'error', null, error.message)
+      // Network error or other issues
+      console.error('Screenshot update failed:', error)
     }
   }
+
+  // Set up periodic screenshot updates (also checks session status)
+  useEffect(() => {
+    if (sessionActive) {
+      // Take initial screenshot immediately
+      updateScreenshot()
+
+      // Update screenshot every 10 seconds
+      const intervalId = setInterval(updateScreenshot, 10000)
+
+      // Cleanup interval and revoke blob URL on unmount
+      return () => {
+        clearInterval(intervalId)
+        if (screenshot && screenshot.startsWith('blob:')) {
+          URL.revokeObjectURL(screenshot)
+        }
+      }
+    } else {
+      // Clear screenshot and revoke URL when disconnected
+      if (screenshot && screenshot.startsWith('blob:')) {
+        URL.revokeObjectURL(screenshot)
+      }
+      setScreenshot('')
+    }
+  }, [sessionActive])
+
+  // Load scripts on component mount
+  useEffect(() => {
+    loadScripts()
+  }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg shadow-2xl p-6 mb-6 border border-gray-700">
+    <div className="flex h-screen bg-gray-900 text-white">
+      {/* Left Panel - Screenshot Display */}
+      <div className="w-1/2 flex flex-col border-r border-gray-700 overflow-hidden">
+        <div className="flex-1 relative overflow-auto bg-gray-800 flex items-center justify-center">
+          {screenshot ? (
+            <div className="relative">
+              <img
+                src={screenshot}
+                alt="Device Screenshot"
+                className="h-screen w-auto shadow-2xl"
+              />
+            </div>
+          ) : (
+            <div className="text-gray-500 text-center">
+              <div className="text-6xl mb-4">📱</div>
+              <div className="text-lg mb-2">No Screenshot</div>
+              <div className="text-sm">Take a screenshot to display device screen</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Right Panel - Control Interface */}
+      <div className="w-1/2 flex flex-col overflow-hidden">
+        {/* Header Bar */}
+        <div className="bg-gray-800 p-4 border-b border-gray-700 flex-shrink-0">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                Appium Control Interface
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                Appium Control
               </h1>
-              <p className="text-gray-400 mt-1">Device automation and testing platform</p>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
                 <div className={`w-3 h-3 rounded-full ${
                   status === 'Connected' ? 'bg-green-500 animate-pulse' :
@@ -199,167 +269,139 @@ export default function HomePage() {
                 }`}></div>
                 <span className="text-sm font-medium">{status}</span>
               </div>
-              {/* Link component: Next.js navigation */}
-              {/* href="/debug" → goes to app/debug/page.jsx */}
-              {/* Client-side navigation (no page reload) */}
               <Link
                 href="/debug"
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-sm"
               >
-                <span>🐛</span>
-                <span>Debug</span>
+                🐛 Debug
               </Link>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Control Panel */}
-          <div className="space-y-6">
-            {/* Session Controls */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg shadow-xl p-6 border border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
-                <span className="text-2xl">🎮</span>
-                <span>Session Control</span>
-              </h2>
-              <div className="flex space-x-3">
-                <button
-                  onClick={handleStartSession}
-                  disabled={sessionActive}
-                  className={`flex-1 py-3 rounded-lg font-medium transition-all duration-200 ${
-                    sessionActive
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700 hover:shadow-lg hover:shadow-green-500/50'
-                  }`}
-                >
-                  Start Session
-                </button>
-                <button
-                  onClick={handleStopSession}
-                  disabled={!sessionActive}
-                  className={`flex-1 py-3 rounded-lg font-medium transition-all duration-200 ${
-                    !sessionActive
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : 'bg-red-600 hover:bg-red-700 hover:shadow-lg hover:shadow-red-500/50'
-                  }`}
-                >
-                  Stop Session
-                </button>
-              </div>
-            </div>
-
-            {/* Command Section */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg shadow-xl p-6 border border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
-                <span className="text-2xl">⚡</span>
-                <span>Execute Command</span>
-              </h2>
-              <div className="space-y-3">
-                <select
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                  disabled={!sessionActive}
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">Select a command...</option>
-                  <option value="tap">Tap (500, 500)</option>
-                  <option value="swipe">Swipe (Bottom to Top)</option>
-                  <option value="getSource">Get Page Source</option>
-                  <option value="screenshot">Take Screenshot</option>
-                </select>
-                <button
-                  onClick={handleExecuteCommand}
-                  disabled={!sessionActive || !command}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-blue-500/50"
-                >
-                  Execute
-                </button>
-              </div>
-            </div>
-
-            {/* Unlock Section */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg shadow-xl p-6 border border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
-                <span className="text-2xl">🔐</span>
-                <span>Device Lock</span>
-              </h2>
-              <div className="flex space-x-3">
-                <button
-                  onClick={handleUnlockDevice}
-                  disabled={!sessionActive}
-                  className="flex-1 py-3 bg-yellow-600 hover:bg-yellow-700 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-yellow-500/50"
-                >
-                  Unlock Device
-                </button>
-                <button
-                  onClick={handleLockDevice}
-                  disabled={!sessionActive}
-                  className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-orange-500/50"
-                >
-                  Lock Device
-                </button>
-              </div>
+        {/* Scrollable Control Panels */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Session Controls */}
+          <div className="bg-gray-800 rounded-lg shadow-xl p-5 border border-gray-700">
+            <h2 className="text-lg font-semibold mb-3 flex items-center space-x-2">
+              <span className="text-xl">🎮</span>
+              <span>Session Control</span>
+            </h2>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleStartSession}
+                disabled={sessionActive}
+                className={`flex-1 py-2.5 rounded-lg font-medium transition-all ${
+                  sessionActive
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                Start Session
+              </button>
+              <button
+                onClick={handleStopSession}
+                disabled={!sessionActive}
+                className={`flex-1 py-2.5 rounded-lg font-medium transition-all ${
+                  !sessionActive
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                Stop Session
+              </button>
             </div>
           </div>
 
-          {/* Results and Logs */}
-          <div className="space-y-6">
-            {/* Results Panel */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg shadow-xl p-6 border border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
-                <span className="text-2xl">📊</span>
-                <span>Results</span>
-              </h2>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {results.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No results yet</p>
-                ) : (
-                  results.map((result, index) => (
-                    <div
-                      key={index}
-                      className={`p-3 rounded-lg border ${
-                        result.type === 'error'
-                          ? 'bg-red-900/30 border-red-700'
-                          : result.status === 'pending'
-                          ? 'bg-yellow-900/30 border-yellow-700'
-                          : 'bg-green-900/30 border-green-700'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="font-medium">{result.command}</span>
-                        <span className="text-xs text-gray-400">{result.timestamp}</span>
-                      </div>
-                      {result.data && (
-                        <div className="text-sm text-gray-300 mt-1 font-mono">
-                          {typeof result.data === 'string' ? result.data : JSON.stringify(result.data)}
-                        </div>
-                      )}
-                      {result.error && (
-                        <div className="text-sm text-red-400 mt-1">{result.error}</div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
 
-            {/* Logs Panel */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg shadow-xl p-6 border border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
-                <span className="text-2xl">📝</span>
-                <span>Logs</span>
-              </h2>
-              <div className="bg-gray-900 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-sm">
-                {logs.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No logs yet</p>
-                ) : (
-                  logs.map((log, index) => (
-                    <div key={index} className="text-gray-300 py-1">
-                      {log}
+          {/* Script Section */}
+          <div className="bg-gray-800 rounded-lg shadow-xl p-5 border border-gray-700">
+            <h2 className="text-lg font-semibold mb-3 flex items-center space-x-2">
+              <span className="text-xl">⚡</span>
+              <span>Execute Script</span>
+            </h2>
+            <div className="space-y-3">
+              <select
+                value={selectedScript}
+                onChange={(e) => setSelectedScript(e.target.value)}
+                onClick={loadScripts}
+                disabled={!sessionActive}
+                className="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                <option value="">Select a script...</option>
+                {scripts.map((script) => (
+                  <option key={script.id} value={script.id}>
+                    {script.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleExecuteScript}
+                disabled={!sessionActive || !selectedScript}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Execute Script
+              </button>
+            </div>
+          </div>
+
+
+          {/* Results Panel */}
+          <div className="bg-gray-800 rounded-lg shadow-xl p-5 border border-gray-700">
+            <h2 className="text-lg font-semibold mb-3 flex items-center space-x-2">
+              <span className="text-xl">📊</span>
+              <span>Results</span>
+            </h2>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {results.length === 0 ? (
+                <p className="text-gray-500 text-center py-6 text-sm">No results yet</p>
+              ) : (
+                results.map((result, index) => (
+                  <div
+                    key={index}
+                    className={`p-3 rounded-lg border text-sm ${
+                      result.type === 'error'
+                        ? 'bg-red-900/30 border-red-700'
+                        : result.status === 'pending'
+                        ? 'bg-yellow-900/30 border-yellow-700'
+                        : 'bg-green-900/30 border-green-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-medium">{result.command}</span>
+                      <span className="text-xs text-gray-400">{result.timestamp}</span>
                     </div>
-                  ))
-                )}
-              </div>
+                    {result.data && (
+                      <div className="text-xs text-gray-300 mt-1 font-mono break-all">
+                        {typeof result.data === 'string' ? result.data.substring(0, 100) : JSON.stringify(result.data).substring(0, 100)}
+                        {(typeof result.data === 'string' ? result.data : JSON.stringify(result.data)).length > 100 && '...'}
+                      </div>
+                    )}
+                    {result.error && (
+                      <div className="text-xs text-red-400 mt-1">{result.error}</div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Logs Panel */}
+          <div className="bg-gray-800 rounded-lg shadow-xl p-5 border border-gray-700">
+            <h2 className="text-lg font-semibold mb-3 flex items-center space-x-2">
+              <span className="text-xl">📝</span>
+              <span>Logs</span>
+            </h2>
+            <div className="bg-gray-900 rounded-lg p-3 max-h-60 overflow-y-auto font-mono text-xs">
+              {logs.length === 0 ? (
+                <p className="text-gray-500 text-center py-6">No logs yet</p>
+              ) : (
+                logs.map((log, index) => (
+                  <div key={index} className="text-gray-300 py-0.5">
+                    {log}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

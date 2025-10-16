@@ -1,5 +1,5 @@
 const { remote } = require('webdriverio');
-const { getConfig } = require('../../../src/lib/config');
+const { getConfig } = require('../../src/config');
 
 // ============================================================================
 // Server-side API Functions (Node.js)
