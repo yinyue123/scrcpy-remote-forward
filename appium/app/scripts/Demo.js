@@ -18,57 +18,59 @@ async function execute(appium) {
 
     // Step 1: Unlock device
     console.log('\n[Step 1] Unlocking device...');
-    const unlockResult = await unlockDevice(appium, '300416');
+    const unlockResult = await unlockDevice(appium, '123456');
     console.log(`Unlock result: ${JSON.stringify(unlockResult)}`);
 
     if (!unlockResult.success) {
       return unlockResult;
     }
+    //
+    // // Step 2: Open Settings app
+    // console.log('\n[Step 2] Opening Settings app...');
+    // await appium.startActivity('com.android.settings', '.Settings');
+    // await appium.pause(2000);
+    // console.log('Settings app opened successfully');
+    //
+    // // Step 3: Scroll to bottom of screen
+    // console.log('\n[Step 3] Scrolling to bottom of Settings...');
+    // await scrollToBottom(appium);
+    // console.log('Scrolled to bottom successfully');
+    //
+    // // Step 4: Find and click "About phone"
+    // console.log('\n[Step 4] Looking for "About phone" option...');
+    // const aboutPhoneClicked = await findAndClickAboutPhone(appium);
+    //
+    // if (!aboutPhoneClicked) {
+    //   return {
+    //     success: false,
+    //     message: 'Could not find "About phone" option'
+    //   };
+    // }
+    //
+    // console.log('"About phone" clicked successfully');
+    // await appium.pause(1500);
+    //
+    // // Step 5: Find IMEI information
+    // console.log('\n[Step 5] Searching for IMEI information...');
+    // const imeiInfo = await findIMEI(appium);
+    // console.log(`IMEI search result: ${JSON.stringify(imeiInfo)}`);
+    //
 
-    // Step 2: Open Settings app
-    console.log('\n[Step 2] Opening Settings app...');
-    await appium.startActivity('com.android.settings', '.Settings');
-    await appium.pause(2000);
-    console.log('Settings app opened successfully');
-
-    // Step 3: Scroll to bottom of screen
-    console.log('\n[Step 3] Scrolling to bottom of Settings...');
-    await scrollToBottom(appium);
-    console.log('Scrolled to bottom successfully');
-
-    // Step 4: Find and click "About phone"
-    console.log('\n[Step 4] Looking for "About phone" option...');
-    const aboutPhoneClicked = await findAndClickAboutPhone(appium);
-
-    if (!aboutPhoneClicked) {
-      return {
-        success: false,
-        message: 'Could not find "About phone" option'
-      };
-    }
-
-    console.log('"About phone" clicked successfully');
-    await appium.pause(1500);
-
-    // Step 5: Find IMEI information
-    console.log('\n[Step 5] Searching for IMEI information...');
-    const imeiInfo = await findIMEI(appium);
-    console.log(`IMEI search result: ${JSON.stringify(imeiInfo)}`);
-
+    await appium.pause(15000);
     // Step 6: Lock device
     console.log('\n[Step 6] Locking device...');
     await appium.lock();
     console.log('Device locked successfully');
 
-    console.log('\n=== Script Completed Successfully ===');
-
-    return {
-      success: true,
-      message: 'Settings test completed successfully',
-      data: {
-        imeiInfo
-      }
-    };
+    // console.log('\n=== Script Completed Successfully ===');
+    //
+    // return {
+    //   success: true,
+    //   message: 'Settings test completed successfully',
+    //   data: {
+    //     imeiInfo
+    //   }
+    // };
 
   } catch (error) {
     console.error(`\nError occurred: ${error.message}`);
@@ -110,9 +112,9 @@ async function unlockDevice(appium, pin) {
       };
     }
 
-    // Wake up the device (press POWER key)
-    console.log('Pressing POWER button to wake up device...');
-    await appium.execute('mobile: pressKey', { keycode: KEYCODE.POWER });
+    // Call unlock interface
+    console.log('Calling unlock interface...');
+    await appium.unlock();
     await appium.pause(500);
 
     // Swipe up to show lock screen
@@ -121,58 +123,52 @@ async function unlockDevice(appium, pin) {
     const swipeAction = Actions.swipe(coords.startX, coords.startY, coords.endX, coords.endY);
     await appium.performActions([swipeAction]);
     await appium.releaseActions();
-    await appium.pause(1000);
+    await appium.pause(500);
 
-    // Enter PIN: 300416
+    // Wait for PIN entry screen - check for pinEntry resource ID
+    console.log('Waiting for PIN entry screen...');
+    const pinEntrySelector = 'android=new UiSelector().resourceId("com.android.systemui:id/pinEntry")';
+    const pinEntryElement = await appium.$(pinEntrySelector);
+
+    const pinEntryExists = await pinEntryElement.waitForExist({ timeout: 5000 });
+    if (!pinEntryExists) {
+      console.log('Warning: pinEntry element not found, but continuing to enter PIN...');
+    } else {
+      console.log('PIN entry screen detected');
+    }
+
+    // Enter PIN using resource IDs (key1 to key9)
     console.log(`Entering PIN: ${pin}...`);
     for (const digit of pin) {
       console.log(`  Tapping digit: ${digit}`);
-      const digitSelector = `android=new UiSelector().text("${digit}")`;
+
+      // Map digit to resource ID (key1 to key9)
+      const keyResourceId = `com.android.systemui:id/key${digit}`;
+      const digitSelector = `android=new UiSelector().resourceId("${keyResourceId}")`;
       const digitElement = await appium.$(digitSelector);
 
       const exists = await digitElement.waitForExist({ timeout: 3000 });
       if (!exists) {
-        throw new Error(`Could not find digit button: ${digit}`);
+        throw new Error(`Could not find digit button with resource ID: ${keyResourceId}`);
       }
 
       await digitElement.click();
-      await appium.pause(200);
+      await appium.pause(50); // Wait 50ms between key presses
     }
 
-    console.log('PIN entered, looking for Enter/OK button...');
+    console.log('PIN entered, clicking Enter button...');
 
-    // Look for and click Enter/OK button
-    try {
-      // Try common button texts
-      const buttonTexts = ['Enter', 'OK', '确认', '确定', 'Done'];
-      let buttonClicked = false;
+    // Click Enter button using key_enter resource ID
+    const enterResourceId = 'com.android.systemui:id/key_enter';
+    const enterSelector = `android=new UiSelector().resourceId("${enterResourceId}")`;
+    const enterElement = await appium.$(enterSelector);
 
-      for (const buttonText of buttonTexts) {
-        try {
-          const enterButton = await appium.$(`android=new UiSelector().text("${buttonText}")`);
-          const exists = await enterButton.isExisting();
-
-          if (exists) {
-            console.log(`Found button: "${buttonText}", clicking...`);
-            await enterButton.click();
-            buttonClicked = true;
-            break;
-          }
-        } catch (e) {
-          // Continue to next button text
-        }
-      }
-
-      if (!buttonClicked) {
-        // Try pressing Enter key as fallback
-        console.log('No Enter button found, pressing ENTER keycode...');
-        await appium.pressKeyCode(KEYCODE.ENTER);
-      }
-    } catch (e) {
-      console.log('Enter button search failed, pressing ENTER keycode...');
-      await appium.pressKeyCode(KEYCODE.ENTER);
+    const enterExists = await enterElement.waitForExist({ timeout: 3000 });
+    if (!enterExists) {
+      throw new Error(`Could not find Enter button with resource ID: ${enterResourceId}`);
     }
 
+    await enterElement.click();
     await appium.pause(2000);
 
     // Verify unlock was successful
