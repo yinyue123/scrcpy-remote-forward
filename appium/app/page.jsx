@@ -28,6 +28,7 @@ export default function HomePage() {
   const [selectedScript, setSelectedScript] = useState('')
   const [scripts, setScripts] = useState([])
   const [screenshot, setScreenshot] = useState('')
+  const [isExecutingScript, setIsExecutingScript] = useState(false)
 
   const addLog = (message) => {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`])
@@ -106,11 +107,12 @@ export default function HomePage() {
     if (!selectedScript) return
 
     try {
+      setIsExecutingScript(true)
       addLog(`Executing script: ${selectedScript}`)
       addResult(selectedScript, 'pending')
 
       const res = await fetch('/api/scripts', {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scriptName: selectedScript })
       })
@@ -129,6 +131,25 @@ export default function HomePage() {
     } catch (error) {
       addLog(`Error: ${error.message}`)
       addResult(selectedScript, 'error', null, error.message)
+    } finally {
+      setIsExecutingScript(false)
+    }
+  }
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch('/api/scripts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await res.json()
+
+      if (data.success && data.logs && data.logs.length > 0) {
+        // Append new logs to the existing logs
+        setLogs(prev => [...prev, ...data.logs.map(log => `[${new Date().toLocaleTimeString()}] ${log}`)])
+      }
+    } catch (error) {
+      console.error('Failed to fetch logs:', error)
     }
   }
 
@@ -226,6 +247,22 @@ export default function HomePage() {
   useEffect(() => {
     loadScripts()
   }, [])
+
+  // Poll logs every second when executing script
+  useEffect(() => {
+    if (isExecutingScript) {
+      // Fetch logs immediately
+      fetchLogs()
+
+      // Set up interval to fetch logs every second
+      const logInterval = setInterval(fetchLogs, 1000)
+
+      // Cleanup interval when script execution stops
+      return () => {
+        clearInterval(logInterval)
+      }
+    }
+  }, [isExecutingScript])
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">

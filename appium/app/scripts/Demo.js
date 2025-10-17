@@ -1,87 +1,79 @@
 const { KEYCODE, Actions, Helpers, SWIPE } = require('../src/shortcuts');
 
 /**
- * Test Settings Script
- * - Unlock device with PIN 300416
- * - Open Settings app
- * - Scroll to bottom
- * - Find and click "About phone"
- * - Find IMEI
- * - Lock device
- *
+ * Demo Script
  * @param {Object} appium - Appium wrapper object
  * @returns {Promise<Object>} Result object
  */
 async function execute(appium) {
   try {
-    console.log('=== Starting Settings Test Script ===');
+    appium.log('=== Starting Demo Script ===');
 
     // Step 1: Unlock device
-    console.log('\n[Step 1] Unlocking device...');
-    const unlockResult = await unlockDevice(appium, '123456');
-    console.log(`Unlock result: ${JSON.stringify(unlockResult)}`);
+    appium.log('\n[Step 1] Unlocking device...');
+    const unlockResult = await toggleDeviceLock(appium, false, '123456');
+    appium.log(`Unlock result: ${JSON.stringify(unlockResult)}`);
 
     if (!unlockResult.success) {
       return unlockResult;
     }
-    //
-    // // Step 2: Open Settings app
-    // console.log('\n[Step 2] Opening Settings app...');
-    // await appium.startActivity('com.android.settings', '.Settings');
-    // await appium.pause(2000);
-    // console.log('Settings app opened successfully');
-    //
-    // // Step 3: Scroll to bottom of screen
-    // console.log('\n[Step 3] Scrolling to bottom of Settings...');
-    // await scrollToBottom(appium);
-    // console.log('Scrolled to bottom successfully');
-    //
-    // // Step 4: Find and click "About phone"
-    // console.log('\n[Step 4] Looking for "About phone" option...');
-    // const aboutPhoneClicked = await findAndClickAboutPhone(appium);
-    //
-    // if (!aboutPhoneClicked) {
-    //   return {
-    //     success: false,
-    //     message: 'Could not find "About phone" option'
-    //   };
-    // }
-    //
-    // console.log('"About phone" clicked successfully');
-    // await appium.pause(1500);
-    //
-    // // Step 5: Find IMEI information
-    // console.log('\n[Step 5] Searching for IMEI information...');
-    // const imeiInfo = await findIMEI(appium);
-    // console.log(`IMEI search result: ${JSON.stringify(imeiInfo)}`);
-    //
 
-    await appium.pause(15000);
-    // Step 6: Lock device
-    console.log('\n[Step 6] Locking device...');
-    await appium.lock();
-    console.log('Device locked successfully');
+    // Step 2: Turn on VPN
+    appium.log('\n[Step 2] Turning on VPN...');
+    const vpnOnResult = await toggleVPN(appium, true);
+    appium.log(`VPN on result: ${JSON.stringify(vpnOnResult)}`);
 
-    // console.log('\n=== Script Completed Successfully ===');
-    //
-    // return {
-    //   success: true,
-    //   message: 'Settings test completed successfully',
-    //   data: {
-    //     imeiInfo
-    //   }
-    // };
+    if (!vpnOnResult.success) {
+      return vpnOnResult;
+    }
+
+    // Step 3: Query Gemini about stock prices
+    appium.log('\n[Step 3] Querying Gemini about stock prices...');
+    const geminiResult = await queryGemini(appium, '今天股价涨了没?');
+    appium.log(`Gemini result: ${JSON.stringify(geminiResult)}`);
+
+    if (geminiResult.success) {
+      appium.log(`Gemini response: ${geminiResult.response}`);
+    } else {
+      appium.log(`Gemini query failed: ${geminiResult.message}`);
+    }
+
+    // Step 4: Turn off VPN
+    appium.log('\n[Step 4] Turning off VPN...');
+    const vpnOffResult = await toggleVPN(appium, false);
+    appium.log(`VPN off result: ${JSON.stringify(vpnOffResult)}`);
+
+    if (!vpnOffResult.success) {
+      return vpnOffResult;
+    }
+
+    // Step 5: Lock device
+    appium.log('\n[Step 5] Locking device...');
+    const lockResult = await toggleDeviceLock(appium, true);
+    appium.log(`Lock result: ${JSON.stringify(lockResult)}`);
+
+    if (!lockResult.success) {
+      return lockResult;
+    }
+
+    appium.log('\n=== Script Completed Successfully ===');
+
+    return {
+      success: true,
+      message: 'Demo completed successfully',
+      geminiResponse: geminiResult.response || 'No response'
+    };
 
   } catch (error) {
-    console.error(`\nError occurred: ${error.message}`);
-    console.error(`Stack trace: ${error.stack}`);
+    appium.err(`\nError occurred: ${error.message}`);
+    appium.err(`Stack trace: ${error.stack}`);
 
     // Try to lock device even if error occurred
     try {
-      console.log('Attempting to lock device after error...');
-      await appium.lock();
+      appium.log('Attempting to lock device after error...');
+      await toggleDeviceLock(appium, true);
     } catch (lockError) {
-      console.error(`Failed to lock device: ${lockError.message}`);
+      appium.err(`Failed to lock device: ${lockError.message}`);
     }
 
     return {
@@ -93,56 +85,71 @@ async function execute(appium) {
 }
 
 /**
- * Unlock device with PIN
- * @param {Object} appium - Appium wrapper object
- * @param {string} pin - PIN code to enter
- * @returns {Promise<Object>} Result object
+ * Toggle device lock state (lock or unlock)
  */
-async function unlockDevice(appium, pin) {
+async function toggleDeviceLock(appium, shouldLock, pin = null) {
   try {
-    // Check if already unlocked
     const locked = await appium.isLocked();
-    console.log(`Device locked status: ${locked}`);
+    appium.log(`Device locked status: ${locked}`);
 
+    // If locking the device
+    if (shouldLock) {
+      if (locked) {
+        appium.log('Device is already locked');
+        return { success: true, message: 'Device is already locked' };
+      }
+
+      appium.log('Locking device...');
+      await appium.lock();
+      await appium.pause(500);
+
+      const nowLocked = await appium.isLocked();
+      if (!nowLocked) {
+        return { success: false, message: 'Failed to lock device' };
+      }
+
+      return { success: true, message: 'Device locked successfully' };
+    }
+
+    // If unlocking the device
     if (!locked) {
-      console.log('Device is already unlocked');
-      return {
-        success: true,
-        message: 'Device is already unlocked'
-      };
+      appium.log('Device is already unlocked');
+      return { success: true, message: 'Device is already unlocked' };
+    }
+
+    if (!pin) {
+      throw new Error('PIN is required for unlocking device');
     }
 
     // Call unlock interface
-    console.log('Calling unlock interface...');
+    appium.log('Calling unlock interface...');
     await appium.unlock();
     await appium.pause(500);
 
     // Swipe up to show lock screen
-    console.log('Swiping up to show lock screen...');
+    appium.log('Swiping up to show lock screen...');
     const coords = await Helpers.getSwipeCoordinates(appium, SWIPE.UP, 0.6);
     const swipeAction = Actions.swipe(coords.startX, coords.startY, coords.endX, coords.endY);
     await appium.performActions([swipeAction]);
     await appium.releaseActions();
     await appium.pause(500);
 
-    // Wait for PIN entry screen - check for pinEntry resource ID
-    console.log('Waiting for PIN entry screen...');
+    // Wait for PIN entry screen
+    appium.log('Waiting for PIN entry screen...');
     const pinEntrySelector = 'android=new UiSelector().resourceId("com.android.systemui:id/pinEntry")';
     const pinEntryElement = await appium.$(pinEntrySelector);
-
     const pinEntryExists = await pinEntryElement.waitForExist({ timeout: 5000 });
+
     if (!pinEntryExists) {
-      console.log('Warning: pinEntry element not found, but continuing to enter PIN...');
+      appium.log('Warning: pinEntry element not found, but continuing to enter PIN...');
     } else {
-      console.log('PIN entry screen detected');
+      appium.log('PIN entry screen detected');
     }
 
-    // Enter PIN using resource IDs (key1 to key9)
-    console.log(`Entering PIN: ${pin}...`);
+    // Enter PIN using resource IDs
+    appium.log(`Entering PIN: ${pin}...`);
     for (const digit of pin) {
-      console.log(`  Tapping digit: ${digit}`);
-
-      // Map digit to resource ID (key1 to key9)
+      appium.log(`  Tapping digit: ${digit}`);
       const keyResourceId = `com.android.systemui:id/key${digit}`;
       const digitSelector = `android=new UiSelector().resourceId("${keyResourceId}")`;
       const digitElement = await appium.$(digitSelector);
@@ -153,12 +160,11 @@ async function unlockDevice(appium, pin) {
       }
 
       await digitElement.click();
-      await appium.pause(50); // Wait 50ms between key presses
+      await appium.pause(50);
     }
 
-    console.log('PIN entered, clicking Enter button...');
-
-    // Click Enter button using key_enter resource ID
+    // Click Enter button
+    appium.log('PIN entered, clicking Enter button...');
     const enterResourceId = 'com.android.systemui:id/key_enter';
     const enterSelector = `android=new UiSelector().resourceId("${enterResourceId}")`;
     const enterElement = await appium.$(enterSelector);
@@ -173,231 +179,587 @@ async function unlockDevice(appium, pin) {
 
     // Verify unlock was successful
     const stillLocked = await appium.isLocked();
-    console.log(`Device locked status after unlock attempt: ${stillLocked}`);
+    appium.log(`Device locked status after unlock attempt: ${stillLocked}`);
 
     if (stillLocked) {
-      return {
-        success: false,
-        message: 'Failed to unlock device - device is still locked'
-      };
+      return { success: false, message: 'Failed to unlock device - device is still locked' };
     }
+
+    return { success: true, message: 'Device unlocked successfully' };
+
+  } catch (error) {
+    appium.err(`Toggle lock error: ${error.message}`);
+    return { success: false, message: `Failed to toggle device lock: ${error.message}` };
+  }
+}
+
+/**
+ * Toggle VPN connection (connect or disconnect)
+ */
+async function toggleVPN(appium, shouldConnect) {
+  // Internal helper functions
+  const clickFabButton = async () => {
+    const fabSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/fab")';
+    const fabElement = await appium.$(fabSelector);
+    const fabExists = await fabElement.waitForExist({ timeout: 3000 });
+    if (!fabExists) throw new Error('Could not find FAB button');
+    await fabElement.click();
+  };
+
+  const waitForStatus = async (expectedStatus, timeout) => {
+    const startTime = Date.now();
+    const statusSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/tv_test_state")';
+
+    while (Date.now() - startTime < timeout) {
+      try {
+        const statusElement = await appium.$(statusSelector);
+        const statusExists = await statusElement.waitForExist({ timeout: 1000 });
+        if (statusExists) {
+          const currentStatus = await statusElement.getText();
+          appium.log(`  Current status: ${currentStatus}`);
+          if (currentStatus === expectedStatus) return true;
+        }
+      } catch (e) {
+        // Continue waiting
+      }
+      await appium.pause(500);
+    }
+    return false;
+  };
+
+  const waitForStatusContains = async (expectedText, timeout) => {
+    const startTime = Date.now();
+    const statusSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/tv_test_state")';
+
+    while (Date.now() - startTime < timeout) {
+      try {
+        const statusElement = await appium.$(statusSelector);
+        const statusExists = await statusElement.waitForExist({ timeout: 1000 });
+        if (statusExists) {
+          const currentStatus = await statusElement.getText();
+          appium.log(`  Current status: ${currentStatus}`);
+          if (currentStatus.includes(expectedText)) return true;
+        }
+      } catch (e) {
+        // Continue waiting
+      }
+      await appium.pause(500);
+    }
+    return false;
+  };
+
+  const testVPNConnection = async () => {
+    try {
+      appium.log('Testing VPN connection...');
+      const statusSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/tv_test_state")';
+      const statusElement = await appium.$(statusSelector);
+
+      const statusExists = await statusElement.waitForExist({ timeout: 3000 });
+      if (!statusExists) throw new Error('Could not find status element for testing');
+
+      await statusElement.click();
+      appium.log('Clicked test button, waiting for test result (timeout: 20 seconds)...');
+
+      const startTime = Date.now();
+      const testTimeout = 20000;
+
+      while (Date.now() - startTime < testTimeout) {
+        await appium.pause(1000);
+        const currentStatus = await statusElement.getText();
+        appium.log(`  Test status: ${currentStatus}`);
+
+        if (currentStatus.includes('连接成功')) {
+          appium.log('Connection test successful!');
+          return { success: true, message: 'VPN connection test passed' };
+        }
+
+        if (currentStatus.includes('失败') || currentStatus.includes('错误')) {
+          return { success: false, message: `VPN connection test failed: ${currentStatus}` };
+        }
+      }
+
+      return { success: false, message: 'VPN connection test timeout' };
+    } catch (error) {
+      appium.err(`Test VPN error: ${error.message}`);
+      return { success: false, message: `Failed to test VPN connection: ${error.message}` };
+    }
+  };
+
+  // Main VPN toggle logic
+  try {
+    appium.log(`${shouldConnect ? 'Connecting' : 'Disconnecting'} VPN...`);
+
+    // Open V2RayNG app
+    appium.log('Opening V2RayNG app...');
+    await appium.startActivity('com.v2ray.ang', '.ui.MainActivity');
+    await appium.pause(1000);
+
+    // Wait for the connection status element to appear
+    appium.log('Waiting for connection status element...');
+    const statusSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/tv_test_state")';
+    const statusElement = await appium.$(statusSelector);
+    const statusExists = await statusElement.waitForExist({ timeout: 5000 });
+
+    if (!statusExists) {
+      throw new Error('Could not find connection status element (tv_test_state)');
+    }
+
+    // Get current connection status
+    const currentStatus = await statusElement.getText();
+    appium.log(`Current VPN status: ${currentStatus}`);
+
+    if (shouldConnect) {
+      // Connect VPN
+      if (currentStatus !== '未连接') {
+        appium.log('VPN is already connected, verifying connection...');
+        const testResult = await testVPNConnection();
+        if (testResult.success) {
+          return { success: true, message: 'VPN is already connected and verified' };
+        } else {
+          appium.log('VPN shows connected but test failed, reconnecting...');
+          await clickFabButton();
+          await waitForStatus('未连接', 5000);
+          await appium.pause(500);
+        }
+      }
+
+      // Click FAB button to connect
+      appium.log('Clicking FAB button to connect...');
+      await appium.pause(500);
+      await clickFabButton();
+
+      // Wait for connection to establish
+      appium.log('Waiting for VPN to connect (timeout: 20 seconds)...');
+      const connected = await waitForStatusContains('已连接', 20000);
+
+      if (!connected) {
+        return { success: false, message: 'VPN connection timeout - status did not show "已连接"' };
+      }
+
+      appium.log('VPN connected, testing connection...');
+      const testResult = await testVPNConnection();
+
+      if (!testResult.success) {
+        return { success: false, message: 'VPN connected but connection test failed' };
+      }
+
+      appium.log('Pressing HOME button to return to home screen...');
+      await appium.pressKeyCode(KEYCODE.HOME);
+      await appium.pause(1000);
+
+      return { success: true, message: 'VPN connected and verified successfully' };
+
+    } else {
+      // Disconnect VPN
+      if (currentStatus === '未连接') {
+        appium.log('VPN is already disconnected');
+        appium.log('Pressing HOME button to return to home screen...');
+        await appium.pressKeyCode(KEYCODE.HOME);
+        await appium.pause(1000);
+        return { success: true, message: 'VPN is already disconnected' };
+      }
+
+      // Click FAB button to disconnect
+      appium.log('Clicking FAB button to disconnect...');
+      await clickFabButton();
+
+      // Wait for disconnection
+      appium.log('Waiting for VPN to disconnect...');
+      const disconnected = await waitForStatus('未连接', 10000);
+
+      if (!disconnected) {
+        return { success: false, message: 'VPN disconnection timeout - status did not show "未连接"' };
+      }
+
+      appium.log('Pressing HOME button to return to home screen...');
+      await appium.pressKeyCode(KEYCODE.HOME);
+      await appium.pause(1000);
+
+      return { success: true, message: 'VPN disconnected successfully' };
+    }
+
+  } catch (error) {
+    appium.err(`Toggle VPN error: ${error.message}`);
+    return { success: false, message: `Failed to toggle VPN: ${error.message}` };
+  }
+}
+
+/**
+ * Query Gemini with optional image upload
+ */
+async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
+  // Internal helper functions
+  const findAndClickAlbum = async (albumName) => {
+    let previousAlbumNames = [];
+    let unchangedCount = 0;
+    const maxUnchangedAttempts = 3;
+
+    while (unchangedCount < maxUnchangedAttempts) {
+      const albumNamesSelector = 'android=new UiSelector().resourceId("com.google.android.providers.media.module:id/album_name")';
+      const albumElements = await appium.$$(albumNamesSelector);
+
+      if (albumElements.length === 0) {
+        appium.log('No albums found');
+        return false;
+      }
+
+      const currentAlbumNames = [];
+      for (const element of albumElements) {
+        const text = await element.getText();
+        currentAlbumNames.push(text);
+        appium.log(`  Found album: "${text}"`);
+
+        if (text === albumName) {
+          appium.log(`Found target album: "${albumName}"`);
+          await element.click();
+          return true;
+        }
+      }
+
+      const namesChanged = JSON.stringify(currentAlbumNames) !== JSON.stringify(previousAlbumNames);
+
+      if (!namesChanged && previousAlbumNames.length > 0) {
+        unchangedCount++;
+        appium.log(`Album list unchanged (${unchangedCount}/${maxUnchangedAttempts})`);
+      } else {
+        unchangedCount = 0;
+      }
+
+      if (unchangedCount >= maxUnchangedAttempts) {
+        appium.log('Reached bottom of album list, album not found');
+        return false;
+      }
+
+      previousAlbumNames = currentAlbumNames;
+
+      appium.log('Scrolling down to find more albums...');
+      const coords = await Helpers.getSwipeCoordinates(appium, SWIPE.UP, 0.5);
+      const swipeAction = Actions.swipe(coords.startX, coords.startY, coords.endX, coords.endY, 300);
+      await appium.performActions([swipeAction]);
+      await appium.releaseActions();
+      await appium.pause(1000);
+    }
+
+    return false;
+  };
+
+  const selectImageByIndex = async (imageIndex) => {
+    try {
+      const checkboxSelector = 'android=new UiSelector().resourceId("com.google.android.providers.media.module:id/icon_check")';
+      const checkboxElements = await appium.$$(checkboxSelector);
+
+      appium.log(`Found ${checkboxElements.length} images`);
+
+      if (imageIndex >= checkboxElements.length) {
+        appium.err(`Image index ${imageIndex} out of range (found ${checkboxElements.length} images)`);
+        return false;
+      }
+
+      await checkboxElements[imageIndex].click();
+      appium.log(`Selected image at index ${imageIndex}`);
+      await appium.pause(500);
+
+      return true;
+    } catch (error) {
+      appium.err(`Error selecting image: ${error.message}`);
+      return false;
+    }
+  };
+
+  const getGeminiResponse = async () => {
+    try {
+      const chatHistorySelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_chat_history_list")';
+      const chatHistory = await appium.$(chatHistorySelector);
+
+      const chatHistoryExists = await chatHistory.waitForExist({ timeout: 5000 });
+      if (!chatHistoryExists) {
+        throw new Error('Could not find chat history');
+      }
+
+      const responseTextSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_text")';
+      const responseElements = await appium.$$(responseTextSelector);
+
+      if (responseElements.length === 0) {
+        throw new Error('No response elements found');
+      }
+
+      const lastResponseElement = responseElements[responseElements.length - 1];
+      const responseText = await lastResponseElement.getText();
+
+      return responseText;
+    } catch (error) {
+      appium.err(`Error getting response: ${error.message}`);
+      return null;
+    }
+  };
+
+  // Main Gemini query logic
+  try {
+    appium.log(`Querying Gemini: "${queryText}"`);
+    if (albumName && imageIndex >= 0) {
+      appium.log(`With image from album: "${albumName}", index: ${imageIndex}`);
+    }
+
+    // Open Gemini app using search
+    appium.log('Opening Gemini app...');
+    const openResult = await openAppBySearch(appium, 'Gemini');
+    if (!openResult.success) {
+      throw new Error(`Failed to open Gemini: ${openResult.message}`);
+    }
+    await appium.pause(2000);
+
+    // Click on input field
+    appium.log('Clicking on input field...');
+    const inputSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_input_collapsed_text_half_sheet")';
+    const inputElement = await appium.$(inputSelector);
+    const inputExists = await inputElement.waitForExist({ timeout: 5000 });
+
+    if (!inputExists) {
+      throw new Error('Could not find input field');
+    }
+
+    await inputElement.click();
+    await appium.pause(500);
+
+    // Enter query text
+    appium.log('Entering query text...');
+    await inputElement.setValue(queryText);
+    await appium.pause(1000);
+
+    // Upload image if required
+    if (albumName && imageIndex >= 0) {
+      appium.log('Uploading image...');
+
+      // Click attachment button
+      appium.log('Clicking attachment button...');
+      const attachmentSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_chat_input_attachment_btn")';
+      const attachmentBtn = await appium.$(attachmentSelector);
+      const attachmentExists = await attachmentBtn.waitForExist({ timeout: 5000 });
+
+      if (!attachmentExists) {
+        throw new Error('Could not find attachment button');
+      }
+
+      await attachmentBtn.click();
+      await appium.pause(1500);
+
+      // Click "图库" (Gallery)
+      appium.log('Looking for "图库" (Gallery) option...');
+      const gallerySelector = 'android=new UiSelector().text("图库")';
+      const galleryElement = await appium.$(gallerySelector);
+      const galleryExists = await galleryElement.waitForExist({ timeout: 5000 });
+
+      if (!galleryExists) {
+        throw new Error('Could not find "图库" (Gallery) option');
+      }
+
+      await galleryElement.click();
+      await appium.pause(2000);
+
+      // Click "相册" (Albums)
+      appium.log('Looking for "相册" (Albums) option...');
+      const albumsSelector = 'android=new UiSelector().text("相册")';
+      const albumsElement = await appium.$(albumsSelector);
+      const albumsExists = await albumsElement.waitForExist({ timeout: 5000 });
+
+      if (!albumsExists) {
+        throw new Error('Could not find "相册" (Albums) option');
+      }
+
+      await albumsElement.click();
+      await appium.pause(2000);
+
+      // Find target album
+      appium.log(`Looking for album: "${albumName}"...`);
+      const albumFound = await findAndClickAlbum(albumName);
+
+      if (!albumFound) {
+        throw new Error(`Could not find album: "${albumName}"`);
+      }
+
+      await appium.pause(1500);
+
+      // Select image by index
+      appium.log(`Selecting image at index: ${imageIndex}...`);
+      const imageSelected = await selectImageByIndex(imageIndex);
+
+      if (!imageSelected) {
+        throw new Error(`Could not select image at index: ${imageIndex}`);
+      }
+
+      // Click Add button
+      appium.log('Clicking Add button...');
+      const addButtonSelector = 'android=new UiSelector().resourceId("com.google.android.providers.media.module:id/button_add")';
+      const addButton = await appium.$(addButtonSelector);
+      const addButtonExists = await addButton.waitForExist({ timeout: 5000 });
+
+      if (!addButtonExists) {
+        throw new Error('Could not find Add button');
+      }
+
+      await addButton.click();
+      appium.log('Waiting for image to upload (10 seconds)...');
+      await appium.pause(10000);
+    }
+
+    // Click send button
+    appium.log('Clicking send button...');
+    const sendButtonSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_send_button")';
+    const sendButton = await appium.$(sendButtonSelector);
+    const sendButtonExists = await sendButton.waitForExist({ timeout: 5000 });
+
+    if (!sendButtonExists) {
+      throw new Error('Could not find send button');
+    }
+
+    await sendButton.click();
+    await appium.pause(2000);
+
+    // Handle review popup if it appears
+    appium.log('Checking for review popup...');
+    try {
+      const reviewPopupSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/0_resource_name_obfuscated").textContains("评价会公开显示")';
+      const reviewPopup = await appium.$(reviewPopupSelector);
+      const reviewPopupExists = await reviewPopup.waitForExist({ timeout: 3000 });
+
+      if (reviewPopupExists) {
+        appium.log('Review popup detected, clicking "以后再说"...');
+        const laterButtonSelector = 'android=new UiSelector().text("以后再说")';
+        const laterButton = await appium.$(laterButtonSelector);
+        const laterButtonExists = await laterButton.waitForExist({ timeout: 3000 });
+
+        if (laterButtonExists) {
+          await laterButton.click();
+          await appium.pause(1000);
+        }
+      }
+    } catch (e) {
+      appium.log('No review popup appeared');
+    }
+
+    // Wait for response
+    appium.log('Waiting for Gemini response (60 seconds)...');
+    await appium.pause(60000);
+
+    // Get response
+    appium.log('Retrieving response...');
+    const response = await getGeminiResponse();
+
+    if (!response) {
+      throw new Error('Could not retrieve Gemini response');
+    }
+
+    appium.log(`Gemini response: ${response}`);
+
+    // Press HOME button to return to home screen
+    appium.log('Pressing HOME button to return to home screen...');
+    await appium.pressKeyCode(KEYCODE.HOME);
+    await appium.pause(1000);
 
     return {
       success: true,
-      message: 'Device unlocked successfully'
+      message: 'Query completed successfully',
+      response: response
     };
 
   } catch (error) {
-    console.error(`Unlock error: ${error.message}`);
+    appium.err(`Query Gemini error: ${error.message}`);
     return {
       success: false,
-      message: `Failed to unlock device: ${error.message}`
+      message: `Failed to query Gemini: ${error.message}`
     };
   }
 }
 
 /**
- * Scroll to bottom of current screen
+ * Open app by searching in launcher
  * @param {Object} appium - Appium wrapper object
+ * @param {string} appName - The name of the app to search and open
+ * @returns {Promise<Object>} Result object
  */
-async function scrollToBottom(appium) {
-  console.log('Starting scroll to bottom...');
+async function openAppBySearch(appium, appName) {
+  try {
+    appium.log(`Opening app by search: "${appName}"`);
 
-  // Perform multiple swipes to reach the bottom
-  const scrollCount = 5; // Number of swipes to perform
+    // Open Xperia Launcher
+    appium.log('Opening Xperia Launcher...');
+    await appium.startActivity('com.sonymobile.launcher', '.XperiaLauncher');
+    await appium.pause(1000);
 
-  for (let i = 0; i < scrollCount; i++) {
-    console.log(`  Scroll ${i + 1}/${scrollCount}...`);
-    const coords = await Helpers.getSwipeCoordinates(appium, SWIPE.UP, 0.6);
-    const swipeAction = Actions.swipe(coords.startX, coords.startY, coords.endX, coords.endY, 300);
+    // Click on search button
+    appium.log('Clicking on search button...');
+    const searchButtonSelector = 'android=new UiSelector().resourceId("com.android.launcher3:id/fallback_search_view")';
+    const searchButton = await appium.$(searchButtonSelector);
+    const searchButtonExists = await searchButton.waitForExist({ timeout: 5000 });
 
-    await appium.performActions([swipeAction]);
-    await appium.releaseActions();
+    if (!searchButtonExists) {
+      throw new Error('Could not find search button (fallback_search_view)');
+    }
+
+    await searchButton.click();
+    await appium.pause(1000);
+
+    // Enter app name in search field
+    appium.log(`Entering app name: "${appName}"...`);
+    // The search field should be focused after clicking the search button
+    await appium.execute('mobile: performEditorAction', { action: 'search' });
     await appium.pause(500);
-  }
 
-  console.log('Finished scrolling to bottom');
-}
+    // Find and type in the search field
+    const searchFieldSelector = 'android=new UiSelector().focused(true)';
+    const searchField = await appium.$(searchFieldSelector);
+    await searchField.setValue(appName);
+    await appium.pause(1500);
 
-/**
- * Find and click "About phone" option
- * @param {Object} appium - Appium wrapper object
- * @returns {Promise<boolean>} True if found and clicked
- */
-async function findAndClickAboutPhone(appium) {
-  console.log('Searching for "About phone" option...');
+    // Find the first TextView in RecyclerView
+    appium.log('Looking for app in search results...');
+    const recyclerViewSelector = 'android=new UiSelector().className("androidx.recyclerview.widget.RecyclerView")';
+    const recyclerView = await appium.$(recyclerViewSelector);
+    const recyclerViewExists = await recyclerView.waitForExist({ timeout: 5000 });
 
-  // Try different possible text variations
-  const possibleTexts = [
-    'About phone',
-    'About device',
-    'About',
-    '关于手机',
-    '关于本机',
-    '关于设备'
-  ];
-
-  for (const text of possibleTexts) {
-    try {
-      console.log(`  Trying text: "${text}"`);
-
-      // Try UiSelector text match
-      const element = await appium.$(`android=new UiSelector().textContains("${text}")`);
-      const exists = await element.isExisting();
-
-      if (exists) {
-        console.log(`  Found element with text: "${text}"`);
-        const elementText = await element.getText();
-        console.log(`  Element actual text: "${elementText}"`);
-
-        await element.click();
-        console.log(`  Clicked successfully`);
-        return true;
-      }
-    } catch (e) {
-      console.log(`  Not found with text: "${text}"`);
-    }
-  }
-
-  // If not found by text, try to get page source and search
-  console.log('Text search failed, getting page source...');
-  try {
-    const pageSource = await appium.getPageSource();
-    console.log(`Page source length: ${pageSource.length} characters`);
-
-    // Check if About phone exists in page source
-    const aboutPhoneInSource = pageSource.includes('About') ||
-                               pageSource.includes('关于');
-    console.log(`"About" found in page source: ${aboutPhoneInSource}`);
-
-    if (aboutPhoneInSource) {
-      // Try clicking by resource-id or other attributes
-      const resourceIds = [
-        'android:id/title',
-        'com.android.settings:id/title'
-      ];
-
-      for (const resId of resourceIds) {
-        try {
-          const elements = await appium.$$(`android=new UiSelector().resourceId("${resId}")`);
-          console.log(`Found ${elements.length} elements with resource ID: ${resId}`);
-
-          for (const elem of elements) {
-            const text = await elem.getText();
-            console.log(`  Element text: "${text}"`);
-
-            if (text && (text.includes('About') || text.includes('关于'))) {
-              console.log(`  Clicking element with matching text`);
-              await elem.click();
-              return true;
-            }
-          }
-        } catch (e) {
-          console.log(`  Failed to find elements with resource ID: ${resId}`);
-        }
-      }
-    }
-  } catch (e) {
-    console.error(`Failed to get page source: ${e.message}`);
-  }
-
-  console.log('Could not find "About phone" option');
-  return false;
-}
-
-/**
- * Find IMEI information on the screen
- * @param {Object} appium - Appium wrapper object
- * @returns {Promise<Object>} IMEI information
- */
-async function findIMEI(appium) {
-  console.log('Starting IMEI search...');
-
-  try {
-    // First, try scrolling down a bit to find IMEI
-    console.log('Scrolling to find IMEI...');
-    for (let i = 0; i < 3; i++) {
-      console.log(`  Scroll ${i + 1}/3...`);
-      const coords = await Helpers.getSwipeCoordinates(appium, SWIPE.UP, 0.4);
-      const swipeAction = Actions.swipe(coords.startX, coords.startY, coords.endX, coords.endY, 300);
-
-      await appium.performActions([swipeAction]);
-      await appium.releaseActions();
-      await appium.pause(500);
+    if (!recyclerViewExists) {
+      throw new Error('Could not find RecyclerView with search results');
     }
 
-    // Get page source
-    console.log('Getting page source to search for IMEI...');
-    const pageSource = await appium.getPageSource();
+    // Find the first TextView inside RecyclerView
+    const textViewSelector = 'android=new UiSelector().className("androidx.recyclerview.widget.RecyclerView").childSelector(new UiSelector().className("android.widget.TextView").instance(0))';
+    const firstTextView = await appium.$(textViewSelector);
+    const firstTextViewExists = await firstTextView.waitForExist({ timeout: 5000 });
 
-    // Search for IMEI in page source
-    const imeiPattern = /IMEI[^<]*?(\d{15})/gi;
-    const imeiMatches = pageSource.match(imeiPattern);
-
-    if (imeiMatches && imeiMatches.length > 0) {
-      console.log(`Found IMEI in page source: ${imeiMatches.join(', ')}`);
-
-      return {
-        found: true,
-        imei: imeiMatches,
-        message: `Found ${imeiMatches.length} IMEI(s)`
-      };
+    if (!firstTextViewExists) {
+      throw new Error('Could not find app result in search results');
     }
 
-    // Try to find IMEI elements
-    console.log('Searching for IMEI elements...');
-    const possibleTexts = ['IMEI', 'IMEI 1', 'IMEI 2', 'IMEI1', 'IMEI2'];
-    const foundIMEIs = [];
+    // Get the text to confirm
+    const resultText = await firstTextView.getText();
+    appium.log(`Found app result: "${resultText}"`);
 
-    for (const text of possibleTexts) {
-      try {
-        const element = await appium.$(`android=new UiSelector().textContains("${text}")`);
-        const exists = await element.isExisting();
+    // Click on the first result
+    appium.log('Clicking on first search result...');
+    await firstTextView.click();
+    await appium.pause(2000);
 
-        if (exists) {
-          const elementText = await element.getText();
-          console.log(`Found IMEI element: "${elementText}"`);
-          foundIMEIs.push(elementText);
-        }
-      } catch (e) {
-        // Continue searching
-      }
-    }
-
-    if (foundIMEIs.length > 0) {
-      console.log(`Found ${foundIMEIs.length} IMEI element(s)`);
-      return {
-        found: true,
-        imei: foundIMEIs,
-        message: `Found ${foundIMEIs.length} IMEI element(s)`
-      };
-    }
-
-    // Check if IMEI text exists in page source
-    const hasIMEIText = pageSource.toLowerCase().includes('imei');
-    console.log(`IMEI text found in page source: ${hasIMEIText}`);
+    appium.log(`Successfully opened app: "${appName}"`);
 
     return {
-      found: hasIMEIText,
-      imei: null,
-      message: hasIMEIText ? 'IMEI text found in page but could not extract value' : 'IMEI not found',
-      pageSourceLength: pageSource.length
+      success: true,
+      message: `App "${appName}" opened successfully`,
+      appResult: resultText
     };
 
   } catch (error) {
-    console.error(`IMEI search error: ${error.message}`);
+    appium.err(`Open app by search error: ${error.message}`);
     return {
-      found: false,
-      imei: null,
-      message: `Error searching for IMEI: ${error.message}`
+      success: false,
+      message: `Failed to open app "${appName}": ${error.message}`
     };
   }
 }
 
 module.exports = {
-  name: 'Test Settings',
+  name: 'Demo',
   config: {
-    pin: '300416',
+    pin: '123456',
   },
   execute
 };

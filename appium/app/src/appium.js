@@ -3,6 +3,7 @@ const { getConfig } = require('./config');
 
 let driver = null;
 let wdOpts = null;
+let logs = []; // Global logs array
 
 /**
  * Initialize WebDriver options from config
@@ -62,9 +63,19 @@ async function stopAppiumSession() {
   }
 
   console.log('Stopping Appium session...');
-  await driver.deleteSession();
-  driver = null;
-  console.log('Appium session stopped successfully');
+
+  try {
+    // Try to delete the session gracefully
+    await driver.deleteSession();
+    console.log('Appium session stopped successfully');
+  } catch (error) {
+    // Session might already be closed or invalid
+    console.log('Session already closed or invalid:', error.message);
+  } finally {
+    // Always set driver to null to clean up local state
+    driver = null;
+    console.log('Driver reference cleared');
+  }
 }
 
 /**
@@ -681,7 +692,79 @@ function createAppiumWrapper() {
       checkDriver();
       return await driver.getGeoLocation();
     },
+
+    // ============================================================================
+    // Logging
+    // ============================================================================
+
+    /**
+     * Log a message and store it in the global logs array
+     * @param {string} message - The log message
+     * @returns {void}
+     * @example
+     * appium.log('Starting script execution')
+     * appium.log('Button clicked successfully')
+     */
+    log: (message) => {
+      const logMessage = String(message);
+      let processedMessage = logMessage;
+
+      // If message length exceeds 500, truncate and add ellipsis with original length
+      if (logMessage.length > 500) {
+        processedMessage = logMessage.substring(0, 500) + `... (original length: ${logMessage.length})`;
+      }
+
+      // Store in logs array
+      logs.push(processedMessage);
+
+      // If array exceeds 1000 entries, clear it
+      if (logs.length > 1000) {
+        logs = [];
+      }
+
+      // Also log to console
+      console.log(processedMessage);
+    },
+
+    /**
+     * Log an error message and store it in the global logs array
+     * @param {string} message - The error message
+     * @returns {void}
+     * @example
+     * appium.err('Failed to find element')
+     * appium.err('Script execution failed: ' + error.message)
+     */
+    err: (message) => {
+      const errorMessage = String(message);
+      let processedMessage = `ERROR: ${errorMessage}`;
+
+      // If message length exceeds 500, truncate and add ellipsis with original length
+      if (processedMessage.length > 500) {
+        processedMessage = processedMessage.substring(0, 500) + `... (original length: ${processedMessage.length})`;
+      }
+
+      // Store in logs array
+      logs.push(processedMessage);
+
+      // If array exceeds 1000 entries, clear it
+      if (logs.length > 1000) {
+        logs = [];
+      }
+
+      // Also log to console error
+      console.error(processedMessage);
+    },
   };
+}
+
+/**
+ * Get and clear logs from the global logs array
+ * @returns {Array<string>} Array of log messages
+ */
+function getLogs() {
+  const currentLogs = [...logs]; // Copy the logs
+  logs = []; // Clear the logs array
+  return currentLogs;
 }
 
 module.exports = {
@@ -689,4 +772,5 @@ module.exports = {
   stopAppiumSession,
   getDriver,
   createAppiumWrapper,
+  getLogs,
 };

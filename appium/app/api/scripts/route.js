@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import { createAppiumWrapper } from '../../src/appium'
+import { createAppiumWrapper, getLogs } from '../../src/appium'
 
 const SCRIPTS_DIR = path.join(process.cwd(), 'app', 'scripts')
 
@@ -87,9 +87,29 @@ export async function GET(request) {
 }
 
 /**
- * POST - Execute a script with hot reload
+ * POST - Get logs
  */
 export async function POST(request) {
+  try {
+    const logs = getLogs()
+
+    return NextResponse.json({
+      success: true,
+      logs
+    })
+  } catch (error) {
+    console.error('Get logs error:', error)
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * PUT - Execute a script with hot reload
+ */
+export async function PUT(request) {
   try {
     const { scriptName } = await request.json()
 
