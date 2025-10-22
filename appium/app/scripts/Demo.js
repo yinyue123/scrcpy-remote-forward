@@ -681,34 +681,46 @@ async function openAppBySearch(appium, appName) {
   try {
     appium.log(`Opening app by search: "${appName}"`);
 
-    // Open Xperia Launcher
-    appium.log('Opening Xperia Launcher...');
-    await appium.startActivity('com.sonymobile.launcher', '.XperiaLauncher');
+    // Press HOME button to go to home screen
+    appium.log('Pressing HOME button to go to home screen...');
+    await appium.pressKeyCode(KEYCODE.HOME);
     await appium.pause(1000);
 
-    // Click on search button
-    appium.log('Clicking on search button...');
-    const searchButtonSelector = 'android=new UiSelector().resourceId("com.android.launcher3:id/fallback_search_view")';
-    const searchButton = await appium.$(searchButtonSelector);
-    const searchButtonExists = await searchButton.waitForExist({ timeout: 5000 });
+    // Wait for home screen to appear - check for "设定" TextView
+    appium.log('Waiting for home screen (looking for "设定" TextView)...');
+    const settingsSelector = 'android=new UiSelector().className("android.widget.TextView").text("设定")';
+    const settingsElement = await appium.$(settingsSelector);
+    const settingsExists = await settingsElement.waitForExist({ timeout: 5000 });
 
-    if (!searchButtonExists) {
-      throw new Error('Could not find search button (fallback_search_view)');
+    if (!settingsExists) {
+      throw new Error('Could not confirm home screen - "设定" TextView not found');
+    }
+    appium.log('Home screen confirmed - found "设定" TextView');
+
+    // Swipe up to show app drawer
+    appium.log('Swiping up to show app drawer...');
+    const coords = await Helpers.getSwipeCoordinates(appium, SWIPE.UP, 0.6);
+    const swipeAction = Actions.swipe(coords.startX, coords.startY, coords.endX, coords.endY);
+    await appium.performActions([swipeAction]);
+    await appium.releaseActions();
+    await appium.pause(1000);
+
+    // Click on search view and enter app name
+    appium.log('Clicking on search view...');
+    const searchViewSelector = 'android=new UiSelector().resourceId("com.android.launcher3:id/fallback_search_view")';
+    const searchView = await appium.$(searchViewSelector);
+    const searchViewExists = await searchView.waitForExist({ timeout: 5000 });
+
+    if (!searchViewExists) {
+      throw new Error('Could not find search view (fallback_search_view)');
     }
 
-    await searchButton.click();
+    await searchView.click();
     await appium.pause(1000);
 
-    // Enter app name in search field
+    // Enter app name directly into the search view
     appium.log(`Entering app name: "${appName}"...`);
-    // The search field should be focused after clicking the search button
-    await appium.execute('mobile: performEditorAction', { action: 'search' });
-    await appium.pause(500);
-
-    // Find and type in the search field
-    const searchFieldSelector = 'android=new UiSelector().focused(true)';
-    const searchField = await appium.$(searchFieldSelector);
-    await searchField.setValue(appName);
+    await searchView.setValue(appName);
     await appium.pause(1500);
 
     // Find the first TextView in RecyclerView

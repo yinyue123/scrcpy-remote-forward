@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { startAppiumSession, stopAppiumSession, getDriver } from '../../src/appium'
+import { startAppiumSession, stopAppiumSession, getDriver, isSessionHealthy } from '../../src/appium'
 
 // API Route: /api/session
 // Session management without screenshot
@@ -10,10 +10,20 @@ export async function GET(request) {
     const driver = getDriver()
     const isConnected = driver !== null
 
+    // If driver exists, check health
+    if (isConnected) {
+      const healthy = await isSessionHealthy()
+      return NextResponse.json({
+        success: true,
+        connected: healthy,
+        status: healthy ? 'Connected' : 'Disconnected'
+      })
+    }
+
     return NextResponse.json({
       success: true,
-      connected: isConnected,
-      status: isConnected ? 'Connected' : 'Disconnected'
+      connected: false,
+      status: 'Disconnected'
     })
   } catch (error) {
     return NextResponse.json(

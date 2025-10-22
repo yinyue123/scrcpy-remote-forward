@@ -35,22 +35,57 @@ function initializeOptions() {
  */
 async function startAppiumSession() {
   if (driver) {
-    console.log('Session already active');
-    return driver;
+    console.log('Session already active, checking health...');
+
+    // Check if existing session is healthy
+    try {
+      await driver.getWindowSize(); // Quick health check
+      console.log('Existing session is healthy');
+      return driver;
+    } catch (error) {
+      console.log('Existing session is unhealthy, recreating...');
+      driver = null;
+    }
   }
 
   const opts = initializeOptions();
   const config = getConfig();
+  const maxRetries = 3;
+  let lastError = null;
 
   console.log('Connecting to Appium server...');
-  driver = await remote(opts);
+  console.log(`Target: ${opts.hostname}:${opts.port}`);
 
-  if (config.timeouts?.implicit) {
-    await driver.setTimeout({ implicit: config.timeouts.implicit });
+  // Retry connection up to 3 times
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Connection attempt ${attempt}/${maxRetries}...`);
+
+      driver = await remote(opts);
+
+      if (config.timeouts?.implicit) {
+        await driver.setTimeout({ implicit: config.timeouts.implicit });
+      }
+
+      console.log('Appium session started successfully');
+      return driver;
+    } catch (error) {
+      lastError = error;
+      driver = null;
+      console.error(`Attempt ${attempt}/${maxRetries} failed:`, error.message);
+
+      // If not the last attempt, wait before retrying
+      if (attempt < maxRetries) {
+        const waitTime = 2000; // 2 seconds between retries
+        console.log(`Waiting ${waitTime/1000} seconds before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
   }
 
-  console.log('Appium session started successfully');
-  return driver;
+  // All retries failed
+  console.error(`Failed to start Appium session after ${maxRetries} attempts`);
+  throw lastError;
 }
 
 /**
@@ -84,6 +119,23 @@ async function stopAppiumSession() {
  */
 function getDriver() {
   return driver;
+}
+
+/**
+ * Check if session is healthy
+ * @returns {Promise<boolean>}
+ */
+async function isSessionHealthy() {
+  if (!driver) return false;
+
+  try {
+    await driver.getWindowSize();
+    return true;
+  } catch (error) {
+    console.error('Session health check failed:', error.message);
+    driver = null;
+    return false;
+  }
 }
 
 /**
@@ -771,6 +823,7 @@ module.exports = {
   startAppiumSession,
   stopAppiumSession,
   getDriver,
+  isSessionHealthy,
   createAppiumWrapper,
   getLogs,
 };

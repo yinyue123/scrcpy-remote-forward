@@ -7,7 +7,7 @@
     "port": 4723,
     "logLevel": "error",
     "path": "/",
-    "connectionRetryTimeout": 120000,
+    "connectionRetryTimeout": 30000,
     "connectionRetryCount": 3
   },
   "capabilities": {
@@ -18,12 +18,15 @@
     "appPackage": "com.android.settings",
     "appActivity": ".Settings",
     "noReset": true,
-    "newCommandTimeout": 300,
+    "newCommandTimeout": 1800,
     "autoGrantPermissions": true,
-    "ignoreHiddenApiPolicyError": true
+    "ignoreHiddenApiPolicyError": true,
+    "uiautomator2ServerLaunchTimeout": 30000,
+    "uiautomator2ServerInstallTimeout": 30000,
+    "adbExecTimeout": 30000
   },
   "timeouts": {
-    "implicit": 10000,
+    "implicit": 3000,
     "pageLoad": 30000,
     "script": 30000
   },

@@ -46,6 +46,27 @@ export default function HomePage() {
     setResults(prev => [result, ...prev])
   }
 
+  // Helper function to add timeout to fetch requests
+  const fetchWithTimeout = async (url, options = {}, timeout = 30000) => {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), timeout)
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      })
+      clearTimeout(id)
+      return response
+    } catch (error) {
+      clearTimeout(id)
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - server may be unreachable')
+      }
+      throw error
+    }
+  }
+
   // handleStartSession: Event handler for button click
   // - async: allows using 'await' for asynchronous operations
   const handleStartSession = async () => {
@@ -54,11 +75,12 @@ export default function HomePage() {
       addLog('Starting Appium session...')
       addResult('Start Session', 'pending')
 
-      const res = await fetch('/api/session', {
+      const res = await fetchWithTimeout('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'start' })
-      })
+      }, 60000) // 60 second timeout for session start
+
       const data = await res.json()
 
       if (data.success) {
@@ -111,11 +133,12 @@ export default function HomePage() {
       addLog(`Executing script: ${selectedScript}`)
       addResult(selectedScript, 'pending')
 
-      const res = await fetch('/api/scripts', {
+      const res = await fetchWithTimeout('/api/scripts', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scriptName: selectedScript })
-      })
+      }, 1800000) // 30 minute timeout for script execution
+
       const data = await res.json()
 
       if (data.success) {
@@ -133,6 +156,8 @@ export default function HomePage() {
       addResult(selectedScript, 'error', null, error.message)
     } finally {
       setIsExecutingScript(false)
+      // Fetch final logs after script completion
+      await fetchLogs()
     }
   }
 
@@ -409,13 +434,12 @@ export default function HomePage() {
                       <span className="text-xs text-gray-400">{result.timestamp}</span>
                     </div>
                     {result.data && (
-                      <div className="text-xs text-gray-300 mt-1 font-mono break-all">
-                        {typeof result.data === 'string' ? result.data.substring(0, 100) : JSON.stringify(result.data).substring(0, 100)}
-                        {(typeof result.data === 'string' ? result.data : JSON.stringify(result.data)).length > 100 && '...'}
+                      <div className="text-xs text-gray-300 mt-1 font-mono break-words whitespace-pre-wrap">
+                        {typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)}
                       </div>
                     )}
                     {result.error && (
-                      <div className="text-xs text-red-400 mt-1">{result.error}</div>
+                      <div className="text-xs text-red-400 mt-1 break-words whitespace-pre-wrap">{result.error}</div>
                     )}
                   </div>
                 ))
