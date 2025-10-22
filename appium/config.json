@@ -15,8 +15,6 @@
     "automationName": "UiAutomator2",
     "deviceName": "Android Emulator",
     "platformVersion": "12.0",
-    "appPackage": "com.android.settings",
-    "appActivity": ".Settings",
     "noReset": true,
     "newCommandTimeout": 1800,
     "autoGrantPermissions": true,

@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "description": "Appium control interface with Next.js",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "next dev",
     "build": "next build",
-    "start": "NODE_ENV=production node server.js"
+    "start": "next start"
   },
   "author": "yinyue",
   "license": "ISC",
@@ -13,8 +13,7 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "webdriverio": "^9.4.0",
-    "ws": "^8.18.3"
+    "webdriverio": "^9.4.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",

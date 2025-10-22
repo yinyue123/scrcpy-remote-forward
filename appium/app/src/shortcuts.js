@@ -111,6 +111,55 @@ const KEYCODE = {
 };
 
 // ============================================================================
+// ANDROID CLASS NAMES
+// ============================================================================
+
+/**
+ * Common Android UI Widget Class Names
+ * Use these constants for element selection to avoid typos
+ */
+const CLASS = {
+  // Common Widgets
+  VIEW: 'android.view.View',
+  VIEWGROUP: 'android.view.ViewGroup',
+  TEXTVIEW: 'android.widget.TextView',
+  EDITTEXT: 'android.widget.EditText',
+  BUTTON: 'android.widget.Button',
+  IMAGEVIEW: 'android.widget.ImageView',
+  IMAGEBUTTON: 'android.widget.ImageButton',
+  CHECKBOX: 'android.widget.CheckBox',
+  RADIOBUTTON: 'android.widget.RadioButton',
+  SWITCH: 'android.widget.Switch',
+  TOGGLEBUTTON: 'android.widget.ToggleButton',
+  SEEKBAR: 'android.widget.SeekBar',
+  PROGRESSBAR: 'android.widget.ProgressBar',
+  SPINNER: 'android.widget.Spinner',
+
+  // Layouts
+  LINEARLAYOUT: 'android.widget.LinearLayout',
+  RELATIVELAYOUT: 'android.widget.RelativeLayout',
+  FRAMELAYOUT: 'android.widget.FrameLayout',
+  CONSTRAINTLAYOUT: 'androidx.constraintlayout.widget.ConstraintLayout',
+  COORDINATORLAYOUT: 'androidx.coordinatorlayout.widget.CoordinatorLayout',
+
+  // Lists & Scrolling
+  LISTVIEW: 'android.widget.ListView',
+  GRIDVIEW: 'android.widget.GridView',
+  SCROLLVIEW: 'android.widget.ScrollView',
+  HORIZONTALSCROLLVIEW: 'android.widget.HorizontalScrollView',
+  RECYCLERVIEW: 'androidx.recyclerview.widget.RecyclerView',
+
+  // Web
+  WEBVIEW: 'android.webkit.WebView',
+
+  // Other
+  TOOLBAR: 'android.widget.Toolbar',
+  TABWIDGET: 'android.widget.TabWidget',
+  DATEPICKER: 'android.widget.DatePicker',
+  TIMEPICKER: 'android.widget.TimePicker',
+};
+
+// ============================================================================
 // SWIPE DIRECTIONS
 // ============================================================================
 
@@ -462,6 +511,140 @@ const Helpers = {
 };
 
 // ============================================================================
+// ELEMENT SELECTORS
+// ============================================================================
+
+/**
+ * Build selector string by Resource ID
+ *
+ * @param {string} resourceId - The resource ID (e.g., "com.example:id/button")
+ * @returns {string} UiSelector string
+ *
+ * @example
+ * const selector = Selectors.byId('cn.soulapp.android:id/textContent');
+ * const element = await appium.$(selector);
+ */
+function byId(resourceId) {
+  return `android=new UiSelector().resourceId("${resourceId}")`;
+}
+
+/**
+ * Build selector string by class name and text
+ *
+ * @param {string} className - The class name (use CLASS constants)
+ * @param {string} text - The exact text to match
+ * @returns {string} UiSelector string
+ *
+ * @example
+ * const selector = Selectors.byClassAndText(CLASS.TEXTVIEW, '下一步');
+ * const element = await appium.$(selector);
+ */
+function byClassAndText(className, text) {
+  return `android=new UiSelector().className("${className}").text("${text}")`;
+}
+
+/**
+ * Build selector string by class name and text contains
+ *
+ * @param {string} className - The class name (use CLASS constants)
+ * @param {string} text - The text to search for (partial match)
+ * @returns {string} UiSelector string
+ *
+ * @example
+ * const selector = Selectors.byClassAndTextContains(CLASS.TEXTVIEW, '权限');
+ * const element = await appium.$(selector);
+ */
+function byClassAndTextContains(className, text) {
+  return `android=new UiSelector().className("${className}").textContains("${text}")`;
+}
+
+/**
+ * Build selector string by text only
+ *
+ * @param {string} text - The exact text to match
+ * @returns {string} UiSelector string
+ *
+ * @example
+ * const selector = Selectors.byText('登录');
+ * const element = await appium.$(selector);
+ */
+function byText(text) {
+  return `android=new UiSelector().text("${text}")`;
+}
+
+/**
+ * Build selector string by text contains
+ *
+ * @param {string} text - The text to search for (partial match)
+ * @returns {string} UiSelector string
+ *
+ * @example
+ * const selector = Selectors.byTextContains('确认');
+ * const element = await appium.$(selector);
+ */
+function byTextContains(text) {
+  return `android=new UiSelector().textContains("${text}")`;
+}
+
+/**
+ * Build selector string for child element in RecyclerView
+ *
+ * @param {string} childResourceId - The child element resource ID
+ * @param {number} instance - The instance index (default: 0)
+ * @returns {string} UiSelector string
+ *
+ * @example
+ * const selector = Selectors.byRecyclerViewChild('cn.soulapp.android:id/tv_select_mark', 0);
+ * const element = await appium.$(selector);
+ */
+function byRecyclerViewChild(childResourceId, instance = 0) {
+  return `android=new UiSelector().className("${CLASS.RECYCLERVIEW}").childSelector(new UiSelector().resourceId("${childResourceId}").instance(${instance}))`;
+}
+
+/**
+ * Build selector string by content description
+ *
+ * @param {string} description - The content description to match
+ * @returns {string} UiSelector string
+ *
+ * @example
+ * const selector = Selectors.byDescription('Navigate up');
+ * const element = await appium.$(selector);
+ */
+function byDescription(description) {
+  return `android=new UiSelector().description("${description}")`;
+}
+
+/**
+ * Build selector string by class name only
+ *
+ * @param {string} className - The class name (use CLASS constants)
+ * @param {number} instance - The instance index (default: 0)
+ * @returns {string} UiSelector string
+ *
+ * @example
+ * const selector = Selectors.byClass(CLASS.EDITTEXT, 0);
+ * const element = await appium.$(selector);
+ */
+function byClass(className, instance = 0) {
+  return `android=new UiSelector().className("${className}").instance(${instance})`;
+}
+
+/**
+ * Selectors object containing all selector builder functions
+ */
+const Selectors = {
+  byId,
+  byClassAndText,
+  byClassAndTextContains,
+  byText,
+  byTextContains,
+  byRecyclerViewChild,
+  byDescription,
+  byClass,
+};
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -469,10 +652,14 @@ module.exports = {
   // Constants
   KEYCODE,
   SWIPE,
+  CLASS,
 
   // Action Builders
   Actions,
 
   // Helper Functions
   Helpers,
+
+  // Element Selectors
+  Selectors,
 };

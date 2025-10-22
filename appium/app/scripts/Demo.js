@@ -1,4 +1,4 @@
-const { KEYCODE, Actions, Helpers, SWIPE } = require('../src/shortcuts');
+const { KEYCODE, Actions, Helpers, SWIPE, CLASS, Selectors } = require('../src/shortcuts');
 
 /**
  * Demo Script
@@ -18,37 +18,76 @@ async function execute(appium) {
       return unlockResult;
     }
 
-    // Step 2: Turn on VPN
-    appium.log('\n[Step 2] Turning on VPN...');
-    const vpnOnResult = await toggleVPN(appium, true);
-    appium.log(`VPN on result: ${JSON.stringify(vpnOnResult)}`);
+    // // Step 2: Turn on VPN
+    // appium.log('\n[Step 2] Turning on VPN...');
+    // const vpnOnResult = await toggleVPN(appium, true);
+    // appium.log(`VPN on result: ${JSON.stringify(vpnOnResult)}`);
 
-    if (!vpnOnResult.success) {
-      return vpnOnResult;
+    // if (!vpnOnResult.success) {
+    //   return vpnOnResult;
+    // }
+
+    let publishContent = '大家好';
+    // // Step 3: Query Gemini about making friends
+    // appium.log('\n[Step 3] Querying Gemini about making friends...');
+    // const geminiResult = await queryGemini(appium, '交朋友，做一个简单的自我介绍');
+    // appium.log(`Gemini result: ${JSON.stringify(geminiResult)}`);
+
+    // if (!geminiResult.success) {
+    //   appium.log(`Gemini query failed: ${geminiResult.message}`);
+    //   return geminiResult;
+    // }
+
+    // publishContent = geminiResult.response;
+    // appium.log(`Gemini response: ${publishContent}`);
+
+    // // Step 4: Turn off VPN
+    // appium.log('\n[Step 4] Turning off VPN...');
+    // const vpnOffResult = await toggleVPN(appium, false);
+    // appium.log(`VPN off result: ${JSON.stringify(vpnOffResult)}`);
+
+    // if (!vpnOffResult.success) {
+    //   return vpnOffResult;
+    // }
+
+    // Step 5: Publish Gemini's response to Soul
+    appium.log('\n[Step 5] Publishing Gemini response to Soul...');
+    const soulResult = await publishToSoul(appium, publishContent);
+    appium.log(`Soul result: ${JSON.stringify(soulResult)}`);
+
+    if (!soulResult.success) {
+      appium.log(`Soul publish failed: ${soulResult.message}`);
+      return soulResult;
     }
 
-    // Step 3: Query Gemini about stock prices
-    appium.log('\n[Step 3] Querying Gemini about stock prices...');
-    const geminiResult = await queryGemini(appium, '今天股价涨了没?');
-    appium.log(`Gemini result: ${JSON.stringify(geminiResult)}`);
+    appium.log(`Soul published successfully`);
 
-    if (geminiResult.success) {
-      appium.log(`Gemini response: ${geminiResult.response}`);
-    } else {
-      appium.log(`Gemini query failed: ${geminiResult.message}`);
+    // Step 6: Publish Gemini's response to Momo
+    appium.log('\n[Step 6] Publishing Gemini response to Momo...');
+    const momoResult = await publishToMomo(appium, publishContent);
+    appium.log(`Momo result: ${JSON.stringify(momoResult)}`);
+
+    if (!momoResult.success) {
+      appium.log(`Momo publish failed: ${momoResult.message}`);
+      return momoResult;
     }
 
-    // Step 4: Turn off VPN
-    appium.log('\n[Step 4] Turning off VPN...');
-    const vpnOffResult = await toggleVPN(appium, false);
-    appium.log(`VPN off result: ${JSON.stringify(vpnOffResult)}`);
+    appium.log(`Momo published successfully`);
 
-    if (!vpnOffResult.success) {
-      return vpnOffResult;
+    // Step 7: Publish Gemini's response to Tantan
+    appium.log('\n[Step 7] Publishing Gemini response to Tantan...');
+    const tantanResult = await publishToTantan(appium, publishContent);
+    appium.log(`Tantan result: ${JSON.stringify(tantanResult)}`);
+
+    if (!tantanResult.success) {
+      appium.log(`Tantan publish failed: ${tantanResult.message}`);
+      return tantanResult;
     }
 
-    // Step 5: Lock device
-    appium.log('\n[Step 5] Locking device...');
+    appium.log(`Tantan published successfully`);
+
+    // Step 8: Lock device
+    appium.log('\n[Step 8] Locking device...');
     const lockResult = await toggleDeviceLock(appium, true);
     appium.log(`Lock result: ${JSON.stringify(lockResult)}`);
 
@@ -61,7 +100,10 @@ async function execute(appium) {
     return {
       success: true,
       message: 'Demo completed successfully',
-      geminiResponse: geminiResult.response || 'No response'
+      geminiResponse: publishContent || 'No response',
+      soulPublished: true,
+      momoPublished: true,
+      tantanPublished: true
     };
 
   } catch (error) {
@@ -136,8 +178,7 @@ async function toggleDeviceLock(appium, shouldLock, pin = null) {
 
     // Wait for PIN entry screen
     appium.log('Waiting for PIN entry screen...');
-    const pinEntrySelector = 'android=new UiSelector().resourceId("com.android.systemui:id/pinEntry")';
-    const pinEntryElement = await appium.$(pinEntrySelector);
+    const pinEntryElement = await appium.$(Selectors.byId('com.android.systemui:id/pinEntry'));
     const pinEntryExists = await pinEntryElement.waitForExist({ timeout: 5000 });
 
     if (!pinEntryExists) {
@@ -151,8 +192,7 @@ async function toggleDeviceLock(appium, shouldLock, pin = null) {
     for (const digit of pin) {
       appium.log(`  Tapping digit: ${digit}`);
       const keyResourceId = `com.android.systemui:id/key${digit}`;
-      const digitSelector = `android=new UiSelector().resourceId("${keyResourceId}")`;
-      const digitElement = await appium.$(digitSelector);
+      const digitElement = await appium.$(Selectors.byId(keyResourceId));
 
       const exists = await digitElement.waitForExist({ timeout: 3000 });
       if (!exists) {
@@ -165,13 +205,11 @@ async function toggleDeviceLock(appium, shouldLock, pin = null) {
 
     // Click Enter button
     appium.log('PIN entered, clicking Enter button...');
-    const enterResourceId = 'com.android.systemui:id/key_enter';
-    const enterSelector = `android=new UiSelector().resourceId("${enterResourceId}")`;
-    const enterElement = await appium.$(enterSelector);
+    const enterElement = await appium.$(Selectors.byId('com.android.systemui:id/key_enter'));
 
     const enterExists = await enterElement.waitForExist({ timeout: 3000 });
     if (!enterExists) {
-      throw new Error(`Could not find Enter button with resource ID: ${enterResourceId}`);
+      throw new Error('Could not find Enter button with resource ID: com.android.systemui:id/key_enter');
     }
 
     await enterElement.click();
@@ -199,8 +237,7 @@ async function toggleDeviceLock(appium, shouldLock, pin = null) {
 async function toggleVPN(appium, shouldConnect) {
   // Internal helper functions
   const clickFabButton = async () => {
-    const fabSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/fab")';
-    const fabElement = await appium.$(fabSelector);
+    const fabElement = await appium.$(Selectors.byId('com.v2ray.ang:id/fab'));
     const fabExists = await fabElement.waitForExist({ timeout: 3000 });
     if (!fabExists) throw new Error('Could not find FAB button');
     await fabElement.click();
@@ -208,11 +245,10 @@ async function toggleVPN(appium, shouldConnect) {
 
   const waitForStatus = async (expectedStatus, timeout) => {
     const startTime = Date.now();
-    const statusSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/tv_test_state")';
 
     while (Date.now() - startTime < timeout) {
       try {
-        const statusElement = await appium.$(statusSelector);
+        const statusElement = await appium.$(Selectors.byId('com.v2ray.ang:id/tv_test_state'));
         const statusExists = await statusElement.waitForExist({ timeout: 1000 });
         if (statusExists) {
           const currentStatus = await statusElement.getText();
@@ -229,11 +265,10 @@ async function toggleVPN(appium, shouldConnect) {
 
   const waitForStatusContains = async (expectedText, timeout) => {
     const startTime = Date.now();
-    const statusSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/tv_test_state")';
 
     while (Date.now() - startTime < timeout) {
       try {
-        const statusElement = await appium.$(statusSelector);
+        const statusElement = await appium.$(Selectors.byId('com.v2ray.ang:id/tv_test_state'));
         const statusExists = await statusElement.waitForExist({ timeout: 1000 });
         if (statusExists) {
           const currentStatus = await statusElement.getText();
@@ -251,8 +286,7 @@ async function toggleVPN(appium, shouldConnect) {
   const testVPNConnection = async () => {
     try {
       appium.log('Testing VPN connection...');
-      const statusSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/tv_test_state")';
-      const statusElement = await appium.$(statusSelector);
+      const statusElement = await appium.$(Selectors.byId('com.v2ray.ang:id/tv_test_state'));
 
       const statusExists = await statusElement.waitForExist({ timeout: 3000 });
       if (!statusExists) throw new Error('Could not find status element for testing');
@@ -296,8 +330,7 @@ async function toggleVPN(appium, shouldConnect) {
 
     // Wait for the connection status element to appear
     appium.log('Waiting for connection status element...');
-    const statusSelector = 'android=new UiSelector().resourceId("com.v2ray.ang:id/tv_test_state")';
-    const statusElement = await appium.$(statusSelector);
+    const statusElement = await appium.$(Selectors.byId('com.v2ray.ang:id/tv_test_state'));
     const statusExists = await statusElement.waitForExist({ timeout: 5000 });
 
     if (!statusExists) {
@@ -395,8 +428,7 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
     const maxUnchangedAttempts = 3;
 
     while (unchangedCount < maxUnchangedAttempts) {
-      const albumNamesSelector = 'android=new UiSelector().resourceId("com.google.android.providers.media.module:id/album_name")';
-      const albumElements = await appium.$$(albumNamesSelector);
+      const albumElements = await appium.$$(Selectors.byId('com.google.android.providers.media.module:id/album_name'));
 
       if (albumElements.length === 0) {
         appium.log('No albums found');
@@ -445,8 +477,7 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 
   const selectImageByIndex = async (imageIndex) => {
     try {
-      const checkboxSelector = 'android=new UiSelector().resourceId("com.google.android.providers.media.module:id/icon_check")';
-      const checkboxElements = await appium.$$(checkboxSelector);
+      const checkboxElements = await appium.$$(Selectors.byId('com.google.android.providers.media.module:id/icon_check'));
 
       appium.log(`Found ${checkboxElements.length} images`);
 
@@ -468,16 +499,14 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 
   const getGeminiResponse = async () => {
     try {
-      const chatHistorySelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_chat_history_list")';
-      const chatHistory = await appium.$(chatHistorySelector);
+      const chatHistory = await appium.$(Selectors.byId('com.google.android.googlequicksearchbox:id/assistant_robin_chat_history_list'));
 
       const chatHistoryExists = await chatHistory.waitForExist({ timeout: 5000 });
       if (!chatHistoryExists) {
         throw new Error('Could not find chat history');
       }
 
-      const responseTextSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_text")';
-      const responseElements = await appium.$$(responseTextSelector);
+      const responseElements = await appium.$$(Selectors.byId('com.google.android.googlequicksearchbox:id/assistant_robin_text'));
 
       if (responseElements.length === 0) {
         throw new Error('No response elements found');
@@ -510,8 +539,7 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 
     // Click on input field
     appium.log('Clicking on input field...');
-    const inputSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_input_collapsed_text_half_sheet")';
-    const inputElement = await appium.$(inputSelector);
+    const inputElement = await appium.$(Selectors.byId('com.google.android.googlequicksearchbox:id/assistant_robin_input_collapsed_text_half_sheet'));
     const inputExists = await inputElement.waitForExist({ timeout: 5000 });
 
     if (!inputExists) {
@@ -532,8 +560,7 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 
       // Click attachment button
       appium.log('Clicking attachment button...');
-      const attachmentSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_chat_input_attachment_btn")';
-      const attachmentBtn = await appium.$(attachmentSelector);
+      const attachmentBtn = await appium.$(Selectors.byId('com.google.android.googlequicksearchbox:id/assistant_robin_chat_input_attachment_btn'));
       const attachmentExists = await attachmentBtn.waitForExist({ timeout: 5000 });
 
       if (!attachmentExists) {
@@ -545,8 +572,7 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 
       // Click "图库" (Gallery)
       appium.log('Looking for "图库" (Gallery) option...');
-      const gallerySelector = 'android=new UiSelector().text("图库")';
-      const galleryElement = await appium.$(gallerySelector);
+      const galleryElement = await appium.$(Selectors.byText('图库'));
       const galleryExists = await galleryElement.waitForExist({ timeout: 5000 });
 
       if (!galleryExists) {
@@ -558,8 +584,7 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 
       // Click "相册" (Albums)
       appium.log('Looking for "相册" (Albums) option...');
-      const albumsSelector = 'android=new UiSelector().text("相册")';
-      const albumsElement = await appium.$(albumsSelector);
+      const albumsElement = await appium.$(Selectors.byText('相册'));
       const albumsExists = await albumsElement.waitForExist({ timeout: 5000 });
 
       if (!albumsExists) {
@@ -589,8 +614,7 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 
       // Click Add button
       appium.log('Clicking Add button...');
-      const addButtonSelector = 'android=new UiSelector().resourceId("com.google.android.providers.media.module:id/button_add")';
-      const addButton = await appium.$(addButtonSelector);
+      const addButton = await appium.$(Selectors.byId('com.google.android.providers.media.module:id/button_add'));
       const addButtonExists = await addButton.waitForExist({ timeout: 5000 });
 
       if (!addButtonExists) {
@@ -604,8 +628,7 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 
     // Click send button
     appium.log('Clicking send button...');
-    const sendButtonSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/assistant_robin_send_button")';
-    const sendButton = await appium.$(sendButtonSelector);
+    const sendButton = await appium.$(Selectors.byId('com.google.android.googlequicksearchbox:id/assistant_robin_send_button'));
     const sendButtonExists = await sendButton.waitForExist({ timeout: 5000 });
 
     if (!sendButtonExists) {
@@ -618,14 +641,12 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
     // Handle review popup if it appears
     appium.log('Checking for review popup...');
     try {
-      const reviewPopupSelector = 'android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/0_resource_name_obfuscated").textContains("评价会公开显示")';
-      const reviewPopup = await appium.$(reviewPopupSelector);
+      const reviewPopup = await appium.$(`android=new UiSelector().resourceId("com.google.android.googlequicksearchbox:id/0_resource_name_obfuscated").textContains("评价会公开显示")`);
       const reviewPopupExists = await reviewPopup.waitForExist({ timeout: 3000 });
 
       if (reviewPopupExists) {
         appium.log('Review popup detected, clicking "以后再说"...');
-        const laterButtonSelector = 'android=new UiSelector().text("以后再说")';
-        const laterButton = await appium.$(laterButtonSelector);
+        const laterButton = await appium.$(Selectors.byText('以后再说'));
         const laterButtonExists = await laterButton.waitForExist({ timeout: 3000 });
 
         if (laterButtonExists) {
@@ -672,6 +693,622 @@ async function queryGemini(appium, queryText, albumName = '', imageIndex = -1) {
 }
 
 /**
+ * Check and handle popups
+ * @param {Object} appium - Appium wrapper object
+ * @returns {Promise<Object>} Result object
+ */
+async function handlePopups(appium) {
+  try {
+    appium.log('Checking for popups...');
+
+    // Wait 2 seconds before checking
+    await appium.pause(2000);
+
+    let popupHandled = false;
+
+    // Check for skip button (ad popup)
+    appium.log('Checking for skip button...');
+    try {
+      const skipSelector = Selectors.byClassAndText(CLASS.TEXTVIEW, '跳过');
+      const skipButton = await appium.$(skipSelector);
+      const skipExists = await skipButton.isExisting();
+
+      if (skipExists) {
+        appium.log('Skip button found, clicking...');
+        await skipButton.click();
+        await appium.pause(1000);
+        appium.log('Skip button clicked successfully');
+        popupHandled = true;
+      } else {
+        appium.log('No skip button found');
+      }
+    } catch (e) {
+      appium.log('No skip button found');
+    }
+
+    // Check for permission popup
+    appium.log('Checking for permission popup...');
+    try {
+      const permissionSelector = Selectors.byClassAndTextContains(CLASS.TEXTVIEW, '权限');
+      const permissionElement = await appium.$(permissionSelector);
+      const permissionExists = await permissionElement.isExisting();
+
+      if (permissionExists) {
+        appium.log('Permission popup detected, looking for "暂不开启" button...');
+        const notNowSelector = Selectors.byClassAndText(CLASS.TEXTVIEW, '暂不开启');
+        const notNowButton = await appium.$(notNowSelector);
+        const notNowExists = await notNowButton.isExisting();
+
+        if (notNowExists) {
+          appium.log('"暂不开启" button found, clicking...');
+          await notNowButton.click();
+          await appium.pause(1000);
+          appium.log('"暂不开启" button clicked successfully');
+          popupHandled = true;
+        } else {
+          appium.log('"暂不开启" button not found');
+        }
+      } else {
+        appium.log('No permission popup found');
+      }
+    } catch (e) {
+      appium.log('No permission popup found');
+    }
+
+    // Define popup keywords to check
+    const popupKeywords = ['好评', '评价', '新功能'];
+    let popupFound = false;
+
+    // Check if any popup appears
+    for (const keyword of popupKeywords) {
+      const popupSelector = Selectors.byClassAndTextContains(CLASS.TEXTVIEW, keyword);
+      const popupElement = await appium.$(popupSelector);
+      const popupExists = await popupElement.isExisting();
+
+      if (popupExists) {
+        appium.log(`Popup detected with keyword: "${keyword}"`);
+        popupFound = true;
+        break;
+      }
+    }
+
+    // If popup found, check for cancel button
+    if (popupFound) {
+      appium.log('Looking for cancel button...');
+      const cancelSelector = Selectors.byClassAndText(CLASS.TEXTVIEW, '取消');
+      const cancelButton = await appium.$(cancelSelector);
+      const cancelExists = await cancelButton.isExisting();
+
+      if (cancelExists) {
+        appium.log('Cancel button found, clicking...');
+        await cancelButton.click();
+        await appium.pause(1000);
+        appium.log('Cancel button clicked successfully');
+        popupHandled = true;
+      } else {
+        appium.log('Cancel button not found');
+      }
+    }
+
+    if (popupHandled) {
+      return { success: true, message: 'Popup dismissed', popupHandled: true };
+    } else {
+      appium.log('No popup detected');
+      return { success: true, message: 'No popup detected', popupHandled: false };
+    }
+
+  } catch (error) {
+    appium.err(`Handle popups error: ${error.message}`);
+    return { success: false, message: `Failed to handle popups: ${error.message}` };
+  }
+}
+
+/**
+ * Publish content to Soul
+ * @param {Object} appium - Appium wrapper object
+ * @param {string} content - The content to publish
+ * @param {string} albumName - Optional album name to select image from
+ * @param {number} imageIndex - Optional image index to select
+ * @returns {Promise<Object>} Result object
+ */
+async function publishToSoul(appium, content, albumName = '', imageIndex = -1) {
+  try {
+    appium.log(`Publishing to Soul: "${content}"`);
+    if (albumName && imageIndex >= 0) {
+      appium.log(`With image from album: "${albumName}", index: ${imageIndex}`);
+    }
+
+    // Open Soul app using search
+    appium.log('Opening Soul app...');
+    const openResult = await openAppBySearch(appium, 'Soul');
+    if (!openResult.success) {
+      throw new Error(`Failed to open Soul: ${openResult.message}`);
+    }
+    await appium.pause(2000);
+
+    // Check for popups after opening app
+    await handlePopups(appium);
+
+    // Click on the center publish button
+    appium.log('Clicking on publish button...');
+    const publishButton = await appium.$(Selectors.byId('cn.soulapp.android:id/main_tab_center_img'));
+    const publishButtonExists = await publishButton.waitForExist({ timeout: 5000 });
+
+    if (!publishButtonExists) {
+      throw new Error('Could not find publish button (main_tab_center_img)');
+    }
+
+    await publishButton.click();
+    await appium.pause(2000);
+
+    // Enter content text
+    appium.log('Entering content text...');
+    const contentInput = await appium.$(Selectors.byId('cn.soulapp.android:id/textContent'));
+    const contentInputExists = await contentInput.waitForExist({ timeout: 5000 });
+
+    if (!contentInputExists) {
+      throw new Error('Could not find content input field (textContent)');
+    }
+
+    await contentInput.click();
+    await appium.pause(500);
+    await contentInput.setValue(content);
+    await appium.pause(1000);
+
+    appium.log('Content text entered successfully');
+
+    // Click on camera button to add image
+    if (albumName && imageIndex >= 0) {
+      appium.log('Clicking on camera button...');
+      const cameraButton = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, '相机'));
+      const cameraButtonExists = await cameraButton.waitForExist({ timeout: 5000 });
+
+      if (!cameraButtonExists) {
+        throw new Error('Could not find camera button (TextView with text "相机")');
+      }
+
+      await cameraButton.click();
+      await appium.pause(2000);
+
+      appium.log('Camera button clicked successfully');
+
+      // Select first image in RecyclerView
+      appium.log('Selecting first image...');
+      const imageSelect = await appium.$(Selectors.byRecyclerViewChild('cn.soulapp.android:id/tv_select_mark', 0));
+      const imageSelectExists = await imageSelect.waitForExist({ timeout: 5000 });
+
+      if (!imageSelectExists) {
+        throw new Error('Could not find image select element (tv_select_mark)');
+      }
+
+      await imageSelect.click();
+      await appium.pause(1000);
+
+      appium.log('First image selected successfully');
+
+      // Click next button
+      appium.log('Clicking next button...');
+      const nextButton = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, '下一步'));
+      const nextButtonExists = await nextButton.waitForExist({ timeout: 5000 });
+
+      if (!nextButtonExists) {
+        throw new Error('Could not find next button (TextView with text "下一步")');
+      }
+
+      await nextButton.click();
+      await appium.pause(2000);
+
+      appium.log('Next button clicked successfully');
+
+      // Check if close button appears and click it
+      appium.log('Checking for close button (ivClose)...');
+      try {
+        const closeButton = await appium.$(Selectors.byId('cn.soulapp.android:id/ivClose'));
+        const closeButtonExists = await closeButton.waitForExist({ timeout: 3000 });
+
+        if (closeButtonExists) {
+          appium.log('Close button found, clicking it...');
+          await closeButton.click();
+          await appium.pause(1000);
+          appium.log('Close button clicked successfully');
+        } else {
+          appium.log('Close button not found, continuing...');
+        }
+      } catch (e) {
+        appium.log('No close button appeared');
+      }
+
+      // Click next button again
+      appium.log('Clicking next button again...');
+      const nextButton2 = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, '下一步'));
+      const nextButton2Exists = await nextButton2.waitForExist({ timeout: 5000 });
+
+      if (!nextButton2Exists) {
+        throw new Error('Could not find second next button (TextView with text "下一步")');
+      }
+
+      await nextButton2.click();
+      await appium.pause(2000);
+
+      appium.log('Second next button clicked successfully');
+    } else {
+      appium.log('No image required, skipping camera button');
+      // TODO: Submit the post without image
+    }
+
+    await appium.pause(3000);
+
+    // Click publish button to submit the post
+    appium.log('Clicking publish button...');
+    const publishSubmit = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, '发布'));
+    const publishSubmitExists = await publishSubmit.waitForExist({ timeout: 5000 });
+
+    if (!publishSubmitExists) {
+      throw new Error('Could not find publish button (TextView with text "发布")');
+    }
+
+    await publishSubmit.click();
+    await appium.pause(3000);
+
+    appium.log('Publish button clicked successfully');
+
+    // Press HOME button to return to home screen
+    appium.log('Pressing HOME button to return to home screen...');
+    await appium.pressKeyCode(KEYCODE.HOME);
+    await appium.pause(1000);
+
+    return {
+      success: true,
+      message: 'Soul app opened successfully (publishing logic pending)',
+      content: content
+    };
+
+  } catch (error) {
+    appium.err(`Publish to Soul error: ${error.message}`);
+    return {
+      success: false,
+      message: `Failed to publish to Soul: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Publish content to Momo
+ * @param {Object} appium - Appium wrapper object
+ * @param {string} content - The content to publish
+ * @param {string} albumName - Optional album name to select image from
+ * @param {number} imageIndex - Optional image index to select
+ * @returns {Promise<Object>} Result object
+ */
+async function publishToMomo(appium, content, albumName = '', imageIndex = -1) {
+  try {
+    appium.log(`Publishing to Momo: "${content}"`);
+    if (albumName && imageIndex >= 0) {
+      appium.log(`With image from album: "${albumName}", index: ${imageIndex}`);
+    }
+
+    // Open Momo app using search
+    appium.log('Opening Momo app...');
+    const openResult = await openAppBySearch(appium, 'Momo');
+    if (!openResult.success) {
+      throw new Error(`Failed to open Momo: ${openResult.message}`);
+    }
+    await appium.pause(2000);
+
+    // Check for popups after opening app
+    await handlePopups(appium);
+
+    // TODO: Click on the publish button (modify resource ID)
+    appium.log('Clicking on publish button...');
+    const publishButton = await appium.$(Selectors.byId('MOMO_PUBLISH_BUTTON_RESOURCE_ID'));
+    const publishButtonExists = await publishButton.waitForExist({ timeout: 5000 });
+
+    if (!publishButtonExists) {
+      throw new Error('Could not find publish button');
+    }
+
+    await publishButton.click();
+    await appium.pause(2000);
+
+    // TODO: Enter content text (modify resource ID)
+    appium.log('Entering content text...');
+    const contentInput = await appium.$(Selectors.byId('MOMO_CONTENT_INPUT_RESOURCE_ID'));
+    const contentInputExists = await contentInput.waitForExist({ timeout: 5000 });
+
+    if (!contentInputExists) {
+      throw new Error('Could not find content input field');
+    }
+
+    await contentInput.click();
+    await appium.pause(500);
+    await contentInput.setValue(content);
+    await appium.pause(1000);
+
+    appium.log('Content text entered successfully');
+
+    // TODO: Click on camera/image button to add image (if needed)
+    if (albumName && imageIndex >= 0) {
+      appium.log('Clicking on camera button...');
+      const cameraButton = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, 'MOMO_CAMERA_BUTTON_TEXT'));
+      const cameraButtonExists = await cameraButton.waitForExist({ timeout: 5000 });
+
+      if (!cameraButtonExists) {
+        throw new Error('Could not find camera button');
+      }
+
+      await cameraButton.click();
+      await appium.pause(2000);
+
+      appium.log('Camera button clicked successfully');
+
+      // TODO: Select first image in RecyclerView (modify resource ID)
+      appium.log('Selecting first image...');
+      const imageSelect = await appium.$(Selectors.byRecyclerViewChild('MOMO_IMAGE_SELECT_RESOURCE_ID', 0));
+      const imageSelectExists = await imageSelect.waitForExist({ timeout: 5000 });
+
+      if (!imageSelectExists) {
+        throw new Error('Could not find image select element');
+      }
+
+      await imageSelect.click();
+      await appium.pause(1000);
+
+      appium.log('First image selected successfully');
+
+      // TODO: Click next button (modify button text)
+      appium.log('Clicking next button...');
+      const nextButton = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, 'MOMO_NEXT_BUTTON_TEXT'));
+      const nextButtonExists = await nextButton.waitForExist({ timeout: 5000 });
+
+      if (!nextButtonExists) {
+        throw new Error('Could not find next button');
+      }
+
+      await nextButton.click();
+      await appium.pause(2000);
+
+      appium.log('Next button clicked successfully');
+
+      // TODO: Check if close button appears and click it (modify resource ID if needed)
+      appium.log('Checking for close button...');
+      try {
+        const closeButton = await appium.$(Selectors.byId('MOMO_CLOSE_BUTTON_RESOURCE_ID'));
+        const closeButtonExists = await closeButton.waitForExist({ timeout: 3000 });
+
+        if (closeButtonExists) {
+          appium.log('Close button found, clicking it...');
+          await closeButton.click();
+          await appium.pause(1000);
+          appium.log('Close button clicked successfully');
+        } else {
+          appium.log('Close button not found, continuing...');
+        }
+      } catch (e) {
+        appium.log('No close button appeared');
+      }
+
+      // TODO: Click next button again (if needed, modify button text)
+      appium.log('Clicking next button again...');
+      const nextButton2 = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, 'MOMO_NEXT_BUTTON_TEXT'));
+      const nextButton2Exists = await nextButton2.waitForExist({ timeout: 5000 });
+
+      if (!nextButton2Exists) {
+        throw new Error('Could not find second next button');
+      }
+
+      await nextButton2.click();
+      await appium.pause(2000);
+
+      appium.log('Second next button clicked successfully');
+    } else {
+      appium.log('No image required, skipping camera button');
+    }
+
+    await appium.pause(3000);
+
+    // TODO: Click publish/submit button to finalize (modify button text)
+    appium.log('Clicking publish button...');
+    const publishSubmit = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, 'MOMO_PUBLISH_BUTTON_TEXT'));
+    const publishSubmitExists = await publishSubmit.waitForExist({ timeout: 5000 });
+
+    if (!publishSubmitExists) {
+      throw new Error('Could not find publish submit button');
+    }
+
+    await publishSubmit.click();
+    await appium.pause(3000);
+
+    appium.log('Publish button clicked successfully');
+
+    // Press HOME button to return to home screen
+    appium.log('Pressing HOME button to return to home screen...');
+    await appium.pressKeyCode(KEYCODE.HOME);
+    await appium.pause(1000);
+
+    return {
+      success: true,
+      message: 'Momo content published successfully',
+      content: content
+    };
+
+  } catch (error) {
+    appium.err(`Publish to Momo error: ${error.message}`);
+    return {
+      success: false,
+      message: `Failed to publish to Momo: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Publish content to Tantan
+ * @param {Object} appium - Appium wrapper object
+ * @param {string} content - The content to publish
+ * @param {string} albumName - Optional album name to select image from
+ * @param {number} imageIndex - Optional image index to select
+ * @returns {Promise<Object>} Result object
+ */
+async function publishToTantan(appium, content, albumName = '', imageIndex = -1) {
+  try {
+    appium.log(`Publishing to Tantan: "${content}"`);
+    if (albumName && imageIndex >= 0) {
+      appium.log(`With image from album: "${albumName}", index: ${imageIndex}`);
+    }
+
+    // Open Tantan app using search
+    appium.log('Opening Tantan app...');
+    const openResult = await openAppBySearch(appium, 'Tantan');
+    if (!openResult.success) {
+      throw new Error(`Failed to open Tantan: ${openResult.message}`);
+    }
+    await appium.pause(2000);
+
+    // Check for popups after opening app
+    await handlePopups(appium);
+
+    // TODO: Click on the publish button (modify resource ID)
+    appium.log('Clicking on publish button...');
+    const publishButton = await appium.$(Selectors.byId('TANTAN_PUBLISH_BUTTON_RESOURCE_ID'));
+    const publishButtonExists = await publishButton.waitForExist({ timeout: 5000 });
+
+    if (!publishButtonExists) {
+      throw new Error('Could not find publish button');
+    }
+
+    await publishButton.click();
+    await appium.pause(2000);
+
+    // TODO: Enter content text (modify resource ID)
+    appium.log('Entering content text...');
+    const contentInput = await appium.$(Selectors.byId('TANTAN_CONTENT_INPUT_RESOURCE_ID'));
+    const contentInputExists = await contentInput.waitForExist({ timeout: 5000 });
+
+    if (!contentInputExists) {
+      throw new Error('Could not find content input field');
+    }
+
+    await contentInput.click();
+    await appium.pause(500);
+    await contentInput.setValue(content);
+    await appium.pause(1000);
+
+    appium.log('Content text entered successfully');
+
+    // TODO: Click on camera/image button to add image (if needed)
+    if (albumName && imageIndex >= 0) {
+      appium.log('Clicking on camera button...');
+      const cameraButton = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, 'TANTAN_CAMERA_BUTTON_TEXT'));
+      const cameraButtonExists = await cameraButton.waitForExist({ timeout: 5000 });
+
+      if (!cameraButtonExists) {
+        throw new Error('Could not find camera button');
+      }
+
+      await cameraButton.click();
+      await appium.pause(2000);
+
+      appium.log('Camera button clicked successfully');
+
+      // TODO: Select first image in RecyclerView (modify resource ID)
+      appium.log('Selecting first image...');
+      const imageSelect = await appium.$(Selectors.byRecyclerViewChild('TANTAN_IMAGE_SELECT_RESOURCE_ID', 0));
+      const imageSelectExists = await imageSelect.waitForExist({ timeout: 5000 });
+
+      if (!imageSelectExists) {
+        throw new Error('Could not find image select element');
+      }
+
+      await imageSelect.click();
+      await appium.pause(1000);
+
+      appium.log('First image selected successfully');
+
+      // TODO: Click next button (modify button text)
+      appium.log('Clicking next button...');
+      const nextButton = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, 'TANTAN_NEXT_BUTTON_TEXT'));
+      const nextButtonExists = await nextButton.waitForExist({ timeout: 5000 });
+
+      if (!nextButtonExists) {
+        throw new Error('Could not find next button');
+      }
+
+      await nextButton.click();
+      await appium.pause(2000);
+
+      appium.log('Next button clicked successfully');
+
+      // TODO: Check if close button appears and click it (modify resource ID if needed)
+      appium.log('Checking for close button...');
+      try {
+        const closeButton = await appium.$(Selectors.byId('TANTAN_CLOSE_BUTTON_RESOURCE_ID'));
+        const closeButtonExists = await closeButton.waitForExist({ timeout: 3000 });
+
+        if (closeButtonExists) {
+          appium.log('Close button found, clicking it...');
+          await closeButton.click();
+          await appium.pause(1000);
+          appium.log('Close button clicked successfully');
+        } else {
+          appium.log('Close button not found, continuing...');
+        }
+      } catch (e) {
+        appium.log('No close button appeared');
+      }
+
+      // TODO: Click next button again (if needed, modify button text)
+      appium.log('Clicking next button again...');
+      const nextButton2 = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, 'TANTAN_NEXT_BUTTON_TEXT'));
+      const nextButton2Exists = await nextButton2.waitForExist({ timeout: 5000 });
+
+      if (!nextButton2Exists) {
+        throw new Error('Could not find second next button');
+      }
+
+      await nextButton2.click();
+      await appium.pause(2000);
+
+      appium.log('Second next button clicked successfully');
+    } else {
+      appium.log('No image required, skipping camera button');
+    }
+
+    await appium.pause(3000);
+
+    // TODO: Click publish/submit button to finalize (modify button text)
+    appium.log('Clicking publish button...');
+    const publishSubmit = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, 'TANTAN_PUBLISH_BUTTON_TEXT'));
+    const publishSubmitExists = await publishSubmit.waitForExist({ timeout: 5000 });
+
+    if (!publishSubmitExists) {
+      throw new Error('Could not find publish submit button');
+    }
+
+    await publishSubmit.click();
+    await appium.pause(3000);
+
+    appium.log('Publish button clicked successfully');
+
+    // Press HOME button to return to home screen
+    appium.log('Pressing HOME button to return to home screen...');
+    await appium.pressKeyCode(KEYCODE.HOME);
+    await appium.pause(1000);
+
+    return {
+      success: true,
+      message: 'Tantan content published successfully',
+      content: content
+    };
+
+  } catch (error) {
+    appium.err(`Publish to Tantan error: ${error.message}`);
+    return {
+      success: false,
+      message: `Failed to publish to Tantan: ${error.message}`
+    };
+  }
+}
+
+/**
  * Open app by searching in launcher
  * @param {Object} appium - Appium wrapper object
  * @param {string} appName - The name of the app to search and open
@@ -688,8 +1325,7 @@ async function openAppBySearch(appium, appName) {
 
     // Wait for home screen to appear - check for "设定" TextView
     appium.log('Waiting for home screen (looking for "设定" TextView)...');
-    const settingsSelector = 'android=new UiSelector().className("android.widget.TextView").text("设定")';
-    const settingsElement = await appium.$(settingsSelector);
+    const settingsElement = await appium.$(Selectors.byClassAndText(CLASS.TEXTVIEW, '设定'));
     const settingsExists = await settingsElement.waitForExist({ timeout: 5000 });
 
     if (!settingsExists) {
@@ -707,8 +1343,7 @@ async function openAppBySearch(appium, appName) {
 
     // Click on search view and enter app name
     appium.log('Clicking on search view...');
-    const searchViewSelector = 'android=new UiSelector().resourceId("com.android.launcher3:id/fallback_search_view")';
-    const searchView = await appium.$(searchViewSelector);
+    const searchView = await appium.$(Selectors.byId('com.android.launcher3:id/fallback_search_view'));
     const searchViewExists = await searchView.waitForExist({ timeout: 5000 });
 
     if (!searchViewExists) {
@@ -725,8 +1360,7 @@ async function openAppBySearch(appium, appName) {
 
     // Find the first TextView in RecyclerView
     appium.log('Looking for app in search results...');
-    const recyclerViewSelector = 'android=new UiSelector().className("androidx.recyclerview.widget.RecyclerView")';
-    const recyclerView = await appium.$(recyclerViewSelector);
+    const recyclerView = await appium.$(Selectors.byClass(CLASS.RECYCLERVIEW));
     const recyclerViewExists = await recyclerView.waitForExist({ timeout: 5000 });
 
     if (!recyclerViewExists) {
@@ -734,8 +1368,7 @@ async function openAppBySearch(appium, appName) {
     }
 
     // Find the first TextView inside RecyclerView
-    const textViewSelector = 'android=new UiSelector().className("androidx.recyclerview.widget.RecyclerView").childSelector(new UiSelector().className("android.widget.TextView").instance(0))';
-    const firstTextView = await appium.$(textViewSelector);
+    const firstTextView = await appium.$(`android=new UiSelector().className("${CLASS.RECYCLERVIEW}").childSelector(new UiSelector().className("${CLASS.TEXTVIEW}").instance(0))`);
     const firstTextViewExists = await firstTextView.waitForExist({ timeout: 5000 });
 
     if (!firstTextViewExists) {
