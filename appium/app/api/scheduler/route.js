@@ -4,21 +4,18 @@
  *
  * Usage:
  * GET /api/scheduler - Trigger task check and execution
+ * POST /api/scheduler - Get scheduler status
  */
 
-import TaskScheduler from '../../src/scheduler';
-import path from 'path';
+import { checkAndExecuteTasks, getStatus } from '../../src/scheduler.js';
 
 // GET - Trigger task check and execution
 export async function GET(request) {
   try {
-    const scriptsDir = path.join(process.cwd(), 'app', 'scripts');
-    const scheduler = new TaskScheduler(scriptsDir);
-
     console.log('[Scheduler API] Task check triggered via GET request');
 
     // Execute tasks in background (non-blocking)
-    scheduler.checkAndExecuteTasks().catch(error => {
+    checkAndExecuteTasks().catch(error => {
       console.error('[Scheduler API] Background task error:', error);
     });
 
@@ -29,6 +26,25 @@ export async function GET(request) {
     return Response.json({
       success: false,
       message: 'Failed to trigger task check',
+      error: error.message
+    }, { status: 500 });
+  }
+}
+
+// POST - Get scheduler status
+export async function POST(request) {
+  try {
+    const status = getStatus();
+
+    return Response.json({
+      success: true,
+      ...status
+    });
+  } catch (error) {
+    console.error('[Scheduler API] Error getting status:', error);
+    return Response.json({
+      success: false,
+      message: 'Failed to get scheduler status',
       error: error.message
     }, { status: 500 });
   }
